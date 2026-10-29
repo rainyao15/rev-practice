@@ -15,7 +15,7 @@ import { readState } from './we-config.mjs';
 import { clientExe, sceneAudioExe } from './paths.mjs';
 import { startMediaServer } from './media-server.mjs';
 import { createSceneCapture } from './scene-capture.mjs';
-import { syncAll } from './we-panel.mjs';
+import { syncAll, startPanelWatcher, ensurePanel } from './we-panel.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -208,6 +208,16 @@ async function session(media, state) {
       log('source:', e.message);
       continue;
     }
+    // a wallpaper can be patched after WE already scanned it (download that landed
+    // while we were down, or a fresh subscription) — fill in the gap for whatever
+    // is selected right now, so at worst the next WE start shows the section
+    if (st.file) {
+      const dir = path.dirname(st.file);
+      if (dir !== lastPanelDir) {
+        lastPanelDir = dir;
+        ensurePanel(dir).catch(() => {});
+      }
+    }
     // this loop is the one that reacts to property changes, so the scene audio has
     // to follow it as well — the outside loop only comes round when this one exits
     syncSceneVolume(st.knobs, src.mode);
@@ -238,6 +248,7 @@ let lastWarnExt = '';
 // put on the page (an MJPEG stream carries no sound), so the only way to change
 // its loudness is to ride the audio session of the process that owns the pop-out.
 let lastSceneVolume = -1;
+let lastPanelDir = '';
 let lastSceneVolumeAt = 0;
 
 function applySceneVolume(vol) {
@@ -317,6 +328,8 @@ if (!argv.includes('--no-panel-sync')) {
   } catch (e) {
     log('panel sync:', e.message);
   }
+  // new subscriptions arrive while we are running — patch them on arrival
+  startPanelWatcher({ log });
 }
 
 await ensureClient();
