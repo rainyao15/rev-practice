@@ -26,6 +26,8 @@ start.cmd       :: 启动桥接，之后在 WE 里选任意壁纸即可
 
 想撤销：`uninstall.cmd`。
 
+遇到问题、或者想要一步步的手把手版本 → **[INSTALL.md](INSTALL.md)（中文安装说明）**。
+
 > 客户端如果已经开着、但没带调试端口，`start.cmd` 会自动重启它（约 5–10 秒恢复）。
 > 不想被打断就加 `--no-relaunch`。
 
@@ -90,6 +92,7 @@ Wallpaper Engine                          NetEase CloudMusic
 
 ```
 install.cmd / uninstall.cmd / start.cmd    批处理入口
+INSTALL.md                                 中文安装说明（手把手 + 排障）
 src/main.mjs                              控制器：挂 CDP、注入、轮询配置
 src/inject.js                             页面层：样式 + 壁纸图层 + 黑胶页/iframe 处理
 src/we-config.mjs                         读 WE 的 config.json
