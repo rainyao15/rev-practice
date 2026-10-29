@@ -92,6 +92,26 @@ internal static class SceneCapture
         return found;
     }
 
+    private static void FixSize(IntPtr hwnd, int wantW, int wantH)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            RECT wr, cr;
+            GetWindowRect(hwnd, out wr);
+            GetClientRect(hwnd, out cr);
+            int dw = (wr.Right - wr.Left) - (cr.Right - cr.Left);
+            int dh = (wr.Bottom - wr.Top) - (cr.Bottom - cr.Top);
+            SetWindowPos(hwnd, IntPtr.Zero, ParkX, ParkY,
+                wantW + dw, wantH + dh, 0x0010 /*SWP_NOACTIVATE*/);
+            Thread.Sleep(200);
+            GetClientRect(hwnd, out cr);
+            if (cr.Right - cr.Left == wantW && cr.Bottom - cr.Top == wantH) return;
+        }
+    }
+
+    private const int ParkX = -4000;
+    private const int ParkY = -4000;
+
     private static int Main(string[] args)
     {
         int pid = 0;
@@ -124,33 +144,21 @@ internal static class SceneCapture
         }
 
         IntPtr hwnd = IntPtr.Zero;
-        for (int i = 0; i < 300 && hwnd == IntPtr.Zero; i++)
+        // Wallpaper Engine opens the pop-out at 0,0 fully visible, so look for it
+        // in a tight loop first and get it out of sight as fast as we can.
+        for (int i = 0; i < 6000 && hwnd == IntPtr.Zero; i++)
         {
             hwnd = FindWindow(pid, cls);
-            if (hwnd == IntPtr.Zero) Thread.Sleep(100);
+            if (hwnd == IntPtr.Zero) Thread.Sleep(i < 400 ? 5 : 50);
         }
         if (hwnd == IntPtr.Zero) { Console.Error.WriteLine("window not found"); return 3; }
 
         // park it far off-screen so it never shows, then size the client area
+        SetWindowPos(hwnd, IntPtr.Zero, ParkX, ParkY, 0, 0, 0x0001 | 0x0010);
+        // must stay *visible*: a hidden window is not composited and PrintWindow
+        // then returns an all-black frame
         ShowWindow(hwnd, 4); // SW_SHOWNOACTIVATE
-        if (wantW > 0 && wantH > 0)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                RECT wr, cr;
-                GetWindowRect(hwnd, out wr);
-                GetClientRect(hwnd, out cr);
-                int dw = (wr.Right - wr.Left) - (cr.Right - cr.Left);
-                int dh = (wr.Bottom - wr.Top) - (cr.Bottom - cr.Top);
-                SetWindowPos(hwnd, IntPtr.Zero, -12000, -12000,
-                    wantW + dw, wantH + dh, 0x0010 /*SWP_NOACTIVATE*/);
-                Thread.Sleep(200);
-            }
-        }
-        else
-        {
-            SetWindowPos(hwnd, IntPtr.Zero, -12000, -12000, 0, 0, 0x0001 | 0x0010);
-        }
+        if (wantW > 0 && wantH > 0) FixSize(hwnd, wantW, wantH);
 
         var codec = GetEncoder(ImageFormat.Jpeg);
         var ep = new EncoderParameters(1);
