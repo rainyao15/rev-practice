@@ -147,3 +147,12 @@ start.cmd
 ## License
 
 MIT
+
+## 嵌入页（iframe）
+
+客户端的「个性皮肤 / 头像挂件 / 音乐桌面」这些页面本质是一个跨域 iframe：
+`https://music.163.com/st/vippendant`。注入脚本在**子框架里也会执行**，早先的版本
+会在里面再建一层背景，结果这页看着是一块死黑的板子。
+
+现在子框架只做一件事：塞一行 `html,body{background:transparent}`，然后把不属于
+自己的层删掉。壁纸只在顶层文档画一次，iframe 自然就透了。

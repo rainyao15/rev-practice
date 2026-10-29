@@ -1,7 +1,25 @@
 // Page-side layer. Injected at document-start by the controller, then called
 // with the current knob values whenever Wallpaper Engine's config.json changes.
 (() => {
-  const VERSION = 10;
+  const VERSION = 11;
+  // The client embeds third-party pages (<iframe src="https://music.163.com/st/...">).
+  // This script runs inside those too, and painting a whole background layer there
+  // would just give the iframe its own opaque canvas. All a subframe needs is to get
+  // out of the way so the wallpaper behind the top document shows through.
+  if (window.top !== window) {
+    const transparent = () => {
+      if (!document.documentElement || document.getElementById('__neFrameStyle')) return;
+      const s = document.createElement('style');
+      s.id = '__neFrameStyle';
+      s.textContent = 'html,body{background:transparent!important}';
+      (document.head || document.documentElement).appendChild(s);
+      const stale = document.getElementById('__neBase');
+      if (stale) stale.remove();
+    };
+    if (document.documentElement) transparent();
+    else document.addEventListener('readystatechange', transparent, { once: true });
+    return;
+  }
   if (window.__neInstalled === VERSION) return;
   // hot-update: a previous layer keeps its own closure alive, so retire it first
   if (typeof window.__neTeardown === 'function') {
