@@ -1,0 +1,12 @@
+# our own machine-specific settings
+config.json
+
+# build output for the capture helper (rebuild with native/build.cmd)
+native/*.exe
+native/*.pdb
+
+# local noise
+node_modules/
+*.log
+shots/
+scratch/
