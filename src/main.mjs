@@ -8,11 +8,12 @@
 //   3. inject the page layer at document-start on every navigation
 //   4. poll Wallpaper Engine's config.json and push the ne_* knobs live
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readState } from './we-config.mjs';
-import { clientExe, sceneAudioExe } from './paths.mjs';
+import { clientExe, sceneAudioExe, weConfigPath } from './paths.mjs';
 import { startMediaServer } from './media-server.mjs';
 import { createSceneCapture } from './scene-capture.mjs';
 import { syncAll, startPanelWatcher, ensurePanel } from './we-panel.mjs';
@@ -319,6 +320,19 @@ async function resolveSource(st) {
 }
 
 // ---------------------------------------------------------------- bootstrap
+// Fail loudly and once, before anything starts watching a directory that may not
+// exist — a missing client or a wrong Steam library should read as one clear line.
+if (!existsSync(clientExe())) {
+  log('client not found:', clientExe());
+  log('set "clientExe" in config.json (see config.example.json) or the NETEASE_EXE env var');
+  process.exit(1);
+}
+if (!existsSync(weConfigPath())) {
+  log('Wallpaper Engine config not found:', weConfigPath());
+  log('set "weRoot" in config.json or the WE_ROOT env var');
+  process.exit(1);
+}
+
 // every wallpaper needs the property group: WE only ever renders what the
 // wallpaper's own project.json declares, and new subscriptions arrive without it
 if (!argv.includes('--no-panel-sync')) {

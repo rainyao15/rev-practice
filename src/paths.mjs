@@ -72,7 +72,9 @@ const detectWeRoot = () => {
     const dir = join(lib, 'steamapps', 'common', 'wallpaper_engine');
     if (existsSync(join(dir, 'wallpaper64.exe'))) return dir;
   }
-  return 'D:\\SteamLibrary\\steamapps\\common\\wallpaper_engine';
+  // every Steam library the registry knows about came up empty — fall back to the
+  // most common default rather than throwing, so the error surfaces somewhere useful
+  return 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\wallpaper_engine';
 };
 
 export const weRoot = () => resolve(config.weRoot || process.env.WE_ROOT || detectWeRoot());
