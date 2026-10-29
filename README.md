@@ -97,7 +97,8 @@ start.cmd
 | `ne_tintstrength` | 0–100 | 染色强度 |
 | `ne_blur` | 0–60 px | 背景模糊 |
 | `ne_fit` | cover / contain / fill / tile | 铺满方式 |
-| `ne_audio` | bool | 是否播放壁纸音轨 |
+| `ne_audio` | bool | 是否播放壁纸音轨（仅 Video，**尚未验证**） |
+| `ne_scenevolume` | 0–100 | **Scene 壁纸音量**（Scene 的声音由 WE 的 pop-out 进程播放，靠 CoreAudio 的 per-process session 调节；`ne_enabled` 关掉时自动置 0） |
 
 ## 自定义路径
 

@@ -12,7 +12,7 @@ import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readState } from './we-config.mjs';
-import { clientExe } from './paths.mjs';
+import { clientExe, sceneAudioExe } from './paths.mjs';
 import { startMediaServer } from './media-server.mjs';
 import { createSceneCapture } from './scene-capture.mjs';
 import { syncAll } from './we-panel.mjs';
@@ -208,6 +208,9 @@ async function session(media, state) {
       log('source:', e.message);
       continue;
     }
+    // this loop is the one that reacts to property changes, so the scene audio has
+    // to follow it as well — the outside loop only comes round when this one exits
+    syncSceneVolume(st.knobs, src.mode);
     const sig = JSON.stringify(st.knobs) + '|' + src.mode + '|' + src.url;
     if (sig === lastSignature && epoch === lastEpoch) continue;
     lastSignature = sig;
@@ -230,6 +233,42 @@ async function session(media, state) {
 // Engine renders it in a pop-out window that we capture into an MJPEG <img>.
 let lastSourceMode = '';
 let lastWarnExt = '';
+
+// Scene audio is played by Wallpaper Engine's own renderer, not by anything we
+// put on the page (an MJPEG stream carries no sound), so the only way to change
+// its loudness is to ride the audio session of the process that owns the pop-out.
+let lastSceneVolume = -1;
+let lastSceneVolumeAt = 0;
+
+function applySceneVolume(vol) {
+  lastSceneVolume = vol;
+  lastSceneVolumeAt = Date.now();
+  const p = spawn(sceneAudioExe(), ['--class', 'WPEOverlappedWallpaper', '--volume', String(vol)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let err = '';
+  p.stdout.on('data', (d) => log('scene audio:', d.toString().trim()));
+  p.stderr.on('data', (d) => {
+    err += d.toString();
+  });
+  p.on('error', (e) => logOnce('scene audio: ' + e.message));
+  p.on('exit', (code) => {
+    if (code !== 0) logOnce(`scene audio: could not set ${vol}% (${err.trim() || 'exit ' + code})`);
+  });
+}
+
+function syncSceneVolume(knobs, mode) {
+  if (mode !== 'scene') {
+    lastSceneVolume = -1;
+    return;
+  }
+  const want = knobs.enabled === false ? 0 : Math.max(0, Math.min(100, Math.round(knobs.sceneVolume ?? 100)));
+  // re-assert now and then: WE resets the session volume when it rebuilds a renderer
+  if (want !== lastSceneVolume || Date.now() - lastSceneVolumeAt > 15000) {
+    log(`scene volume: ${want}% (was ${lastSceneVolume})`);
+    applySceneVolume(want);
+  }
+}
 
 async function resolveSource(st) {
   if (FORCE_SCENE) {
@@ -313,6 +352,7 @@ for (;;) {
     const src = await resolveSource(st);
     state.url = src.url;
     state.mode = src.mode;
+    syncSceneVolume(st.knobs, state.mode);
   } catch (e) {
     logOnce('state: ' + e.message);
   }

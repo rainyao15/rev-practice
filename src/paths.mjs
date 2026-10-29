@@ -87,3 +87,7 @@ export const workshopRoot = () =>
 export const sceneExe = () =>
   resolve(dirname(fileURLToPath(import.meta.url)), '..', 'native',
     process.platform === 'win32' ? 'SceneCapture.exe' : 'SceneCapture');
+
+export const sceneAudioExe = () =>
+  resolve(dirname(fileURLToPath(import.meta.url)), '..', 'native',
+    process.platform === 'win32' ? 'SceneAudio.exe' : 'SceneAudio');

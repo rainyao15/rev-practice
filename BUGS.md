@@ -40,6 +40,7 @@
 | 17 | `we-panel --revert` 后 WE 的 `config.json` 里残留 `ne_*` 值 | 撤销不彻底 | open |
 | 18 | `--all` 会改写 387 张创意工坊壁纸的 `project.json` | Steam 校验会覆盖 | open |
 | 19 | 没有日志文件，出问题只能看控制台 | | open |
+| 20 | Scene 音量在 WE 重建渲染器后会瞬间回到 100%，最多 15 秒才被重设回去 | 切 Scene 壁纸、WE 重启 | open |
 
 ## 待补充
 

@@ -13,6 +13,7 @@ const DEFAULTS = {
   blur: 0,
   fit: 'cover',
   audio: false,
+  sceneVolume: 100,
 };
 
 const norm = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
@@ -69,6 +70,7 @@ export async function readState() {
     if (Number.isFinite(props.ne_blur)) knobs.blur = props.ne_blur;
     if (Number.isFinite(props.ne_tintstrength)) knobs.tintStrength = props.ne_tintstrength;
     if (typeof props.ne_audio === 'boolean') knobs.audio = props.ne_audio;
+    if (Number.isFinite(props.ne_scenevolume)) knobs.sceneVolume = props.ne_scenevolume;
     if (typeof props.ne_fit === 'string') knobs.fit = props.ne_fit;
     if (typeof props.ne_tint === 'string') {
       const p = props.ne_tint.trim().split(/\s+/).map(Number);
