@@ -22,6 +22,7 @@ import { workshopRoot } from './paths.mjs';
 //   node we-panel.mjs --dir <wallpaperDir>  one wallpaper
 //   node we-panel.mjs --revert --all        remove every ne_* key
 import fs from 'node:fs/promises';
+import { watch as fsWatch } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -138,8 +139,54 @@ export async function applyTo(dir, { revert = false, backup = true } = {}) {
   return { dir, changed };
 }
 
-export async function listWallpapers(root = workshopRoot()) {
-  const out = [];
+// Give one wallpaper our property section if it does not have it yet. Safe to
+// call for a wallpaper that is already patched — it then writes nothing.
+export async function ensurePanel(dir) {
+  if (!dir) return { changed: [] };
+  return applyTo(dir, { backup: false });
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Steam drops new workshop items into the library while we are running. Watch for
+// new item folders and patch them right away, so the section is there the first
+// time WE shows the wallpaper — waiting for the next restart is too late.
+export function startPanelWatcher({ log = () => {}, root = workshopRoot() } = {}) {
+  const timers = new Map();
+  let watcher;
+  try {
+    watcher = fsWatch(root, { persistent: false }, (_event, filename) => {
+      const name = filename ? String(filename) : '';
+      if (!/^\d+$/.test(name)) return; // only workshop item folders
+      const dir = path.join(root, name);
+      clearTimeout(timers.get(dir));
+      timers.set(dir, setTimeout(async () => {
+        timers.delete(dir);
+        // the folder appears before Steam has finished writing project.json
+        for (let i = 0; i < 20; i++) {
+          try {
+            const st = await fs.stat(path.join(dir, 'project.json'));
+            if (st.isFile() && st.size > 0) break;
+          } catch {}
+          await sleep(500);
+        }
+        try {
+          const r = await ensurePanel(dir);
+          if (r.changed?.length) log(`panel: ${name} ${r.changed.join(' ')}`);
+        } catch (e) {
+          log(`panel: ${name} ${e.message}`);
+        }
+      }, 800));
+    });
+  } catch (e) {
+    log('panel watch: ' + e.message);
+    return null;
+  }
+  watcher.on?.('error', (e) => log('panel watch: ' + e.message));
+  return watcher;
+}
+
+export async function listWallpapers(root = workshopRoot()) {  const out = [];
   let names;
   try {
     names = await fs.readdir(root, { withFileTypes: true });
