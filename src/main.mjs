@@ -380,7 +380,11 @@ for (;;) {
     state.knobs = st.knobs;
     state.file = st.file;
     state.type = st.type;
-    if (!st.file) logOnce('warning: no wallpaper selected in Wallpaper Engine');
+    if (!st.profile) {
+      logOnce('warning: no Wallpaper Engine profile found in config.json — set "weProfile" in your config file, or start Wallpaper Engine once');
+    } else if (!st.file) {
+      logOnce(`warning: no wallpaper selected in Wallpaper Engine (profile "${st.profile}")`);
+    }
     const src = await resolveSource(st);
     state.url = src.url;
     state.mode = src.mode;

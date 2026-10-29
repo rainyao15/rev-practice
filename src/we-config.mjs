@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { weConfigPath } from './paths.mjs';
+import { config, weConfigPath } from './paths.mjs';
 
 const CONFIG = weConfigPath();
 
@@ -17,6 +18,37 @@ const DEFAULTS = {
 };
 
 const norm = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
+
+// Keys that live next to the profiles but are not profiles.
+const NOT_A_PROFILE = new Set(['installdirectory', 'installdirectoryx', 'version']);
+
+/**
+ * Wallpaper Engine stores everything under a section named after the Windows
+ * account that set it up (`"Rain": {...}`). That name is different on every
+ * machine, so it can never be hardcoded — we look for the section that actually
+ * carries a wallpaper config, and let the user force one when there are several.
+ */
+export function resolveProfile(cfg) {
+  const hint = config.weProfile || process.env.WE_PROFILE || '';
+  const keys = Object.keys(cfg || {});
+  const isProfile = (k) => {
+    const v = cfg[k];
+    return v && typeof v === 'object' && !Array.isArray(v) &&
+      !NOT_A_PROFILE.has(k.toLowerCase()) && (v.general || v.wproperties);
+  };
+  const candidates = keys.filter(isProfile);
+  if (hint) {
+    const forced = candidates.find((k) => k.toLowerCase() === hint.toLowerCase());
+    if (forced) return forced;
+  }
+  // normally it is the account you are signed in as
+  const me = os.userInfo().username;
+  const mine = candidates.find((k) => k.toLowerCase() === me.toLowerCase());
+  if (mine) return mine;
+  // otherwise the one that has a wallpaper selected on some monitor
+  const picked = candidates.find((k) => cfg[k].general?.wallpaperconfig?.selectedwallpapers);
+  return picked || candidates[0] || null;
+}
 
 const typeCache = new Map();
 
@@ -46,11 +78,14 @@ export async function readState() {
   const raw = await fs.readFile(CONFIG, 'utf8');
   const cfg = JSON.parse(raw);
 
-  const selected = cfg?.Rain?.general?.wallpaperconfig?.selectedwallpapers || {};
+  const profile = resolveProfile(cfg);
+  const node = profile ? cfg[profile] : null;
+
+  const selected = node?.general?.wallpaperconfig?.selectedwallpapers || {};
   const firstMonitor = Object.keys(selected).sort()[0];
   const file = firstMonitor ? selected[firstMonitor]?.file || '' : '';
 
-  const wprops = cfg?.Rain?.wproperties || {};
+  const wprops = node?.wproperties || {};
   let props = null;
   if (file) {
     const want = norm(file);
@@ -81,7 +116,7 @@ export async function readState() {
   // our properties only exist once the user has touched the panel
   const touched = props && Object.keys(props).some((k) => k.startsWith('ne_'));
   const type = file ? await wallpaperType(file) : '';
-  return { file, type, knobs, touched: !!touched, configPath: CONFIG };
+  return { file, type, knobs, touched: !!touched, profile, configPath: CONFIG };
 }
 
 export const FIT_VALUES = ['cover', 'contain', 'fill'];

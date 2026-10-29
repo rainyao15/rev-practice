@@ -216,6 +216,30 @@ powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $
 正常情况下会自动探测（注册表 → Steam 的 `libraryfolders.vdf` → 常见路径）。探测不到就
 把 `config.example.json` 复制成 `config.json`，填上三个路径。
 
+**Q：面板里网易云背景的开关已经打开了，网易云窗口却没有任何变化**
+
+最常见的原因是程序没读到「你当前选中的壁纸」。判断方法看控制台日志：
+
+```bat
+node src\main.mjs
+```
+
+- 出现 `warning: no wallpaper selected in Wallpaper Engine (profile "XXX")`
+  → 读到了你的账户段，但 Wallpaper Engine 里确实没选壁纸
+- 出现 `warning: no Wallpaper Engine profile found in config.json`
+  → 没有认出账户段。Wallpaper Engine 把配置存在一个**以 Windows 账户名命名的段**里
+  （比如 `"Rain": {...}`），名字每台机器都不同。程序会自动挑「有壁纸配置的那一段」并优先
+  匹配当前登录账户；如果你同一台机器上有多个账户段，在 `config.json` 里加一条：
+
+  ```json
+  { "weProfile": "Administrator" }
+  ```
+
+  或设环境变量 `WE_PROFILE=Administrator`。
+
+其它可能：客户端没带调试端口（`netstat -ano | findstr ":9222"` 应该有一个 LISTENING）、
+或者网易云窗口还没刷新（关掉重开一次）。
+
 ---
 
 ## 九、安全与边界
