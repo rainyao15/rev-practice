@@ -1,0 +1,21 @@
+{
+  "name": "netease-wallpaper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Inject Wallpaper Engine wallpapers into the NetEase CloudMusic desktop client, and drive them from Wallpaper Engine's own property panel.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "netease-wallpaper": "src/main.mjs",
+    "netease-wallpaper-panel": "src/we-panel.mjs"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "setup": "node src/we-panel.mjs --all && call native\\build.cmd",
+    "build": "call native\\build.cmd",
+    "panel:apply": "node src/we-panel.mjs --all",
+    "panel:revert": "node src/we-panel.mjs --revert --all"
+  }
+}
