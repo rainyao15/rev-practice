@@ -66,6 +66,10 @@ const PROPS = {
   ne_audio: {
     order: 17, text: '播放壁纸音轨', type: 'bool', value: false,
   },
+  ne_scenevolume: {
+    order: 18, text: 'Scene 壁纸音量 (%)', type: 'slider',
+    value: 100, min: 0, max: 100, step: 1,
+  },
 };
 
 async function readJson(file) {
