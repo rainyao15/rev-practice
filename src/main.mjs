@@ -187,7 +187,10 @@ async function session(media, state) {
   });
 
   while (!closed) {
-    await sleep(1000);
+    // WE only writes config.json when the panel's confirm button is pressed, so
+    // this poll is the whole latency budget between "confirm" and "the page
+    // updates". 250 ms is a few parses of a small JSON per second, i.e. free.
+    await sleep(250);
     if (closed) break;
     // a reload creates a fresh document whose layer has no knobs yet
     const epochRes = await call('Runtime.evaluate', {
