@@ -110,6 +110,10 @@ BUGS.md                                   已知问题清单
 默认自动探测（注册表 → 常见安装位置 → Steam 库）。探测不到就复制 `config.example.json`
 为 `config.json` 手动填，或用环境变量 `NETEASE_EXE` / `WE_ROOT` / `WE_WORKSHOP`。
 
+Wallpaper Engine 把配置存在一个**以 Windows 账户名命名的段**里（`"Rain": {...}`），
+这个名字每台机器都不一样。程序会自动挑「有壁纸配置的那一段」，优先匹配当前登录账户；
+如果同一台机器有多个账户段需要指定，用 `weProfile` 或环境变量 `WE_PROFILE` 强制选择。
+
 ## 已知限制
 
 - **桌面歌词、迷你播放器改不了**（原生窗口）。

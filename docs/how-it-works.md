@@ -68,8 +68,11 @@ WE 就会把它们渲染成同面板里的滑块 —— 客户端一侧零 UI。
 面板值不会直接送给我们，而是由 WE 写着 `config.json`：
 
 ```
-Rain.wproperties["D:/…/xxx.mp4"].Monitor0.ne_opacity = 40
+<账户名>.wproperties["D:/…/xxx.mp4"].Monitor0.ne_opacity = 40
 ```
+
+最外层那个键是 **Windows 账户名**（`"Rain"`、`"Administrator"`…），每台机器都不同，
+所以程序从来不硬编码它，而是找「带 `general.wallpaperconfig` 的那一段」，优先匹配当前登录账户。
 
 控制器每秒读一次，有变化就通过 CDP 改页面里的 CSS 变量。一条 1 秒的单向同步，
 足以让"拖滑块 → 背景变化"感觉是实时的。
