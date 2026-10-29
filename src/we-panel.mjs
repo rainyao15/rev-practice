@@ -27,35 +27,38 @@ import { pathToFileURL } from 'node:url';
 
 
 
+// Our section must come *last*: a group swallows every property that sorts after
+// it, so a low order would pull the wallpaper's own controls into our section.
+// Wallpapers use small orders (0-200), so 9000+ safely lands at the bottom.
 const GROUP = {
-  ne_group: { order: 9, text: '网易云背景', type: 'group' },
+  ne_group: { order: 9000, text: '网易云背景', type: 'group' },
 };
 
 const PROPS = {
   ne_enabled: {
-    order: 10, text: '启用网易云背景', type: 'bool', value: true,
+    order: 9001, text: '启用网易云背景', type: 'bool', value: true,
   },
   ne_opacity: {
-    order: 11, text: '壁纸不透明度 (%)', type: 'slider',
+    order: 9002, text: '壁纸不透明度 (%)', type: 'slider',
     value: 100, min: 0, max: 100, step: 1,
   },
   ne_dim: {
-    order: 12, text: '明暗调节 (叠加黑 %)', type: 'slider',
+    order: 9003, text: '明暗调节 (叠加黑 %)', type: 'slider',
     value: 0, min: 0, max: 100, step: 1,
   },
   ne_tint: {
-    order: 13, text: '染色', type: 'color', value: '1 1 1',
+    order: 9004, text: '染色', type: 'color', value: '1 1 1',
   },
   ne_tintstrength: {
-    order: 14, text: '染色强度 (%)', type: 'slider',
+    order: 9005, text: '染色强度 (%)', type: 'slider',
     value: 0, min: 0, max: 100, step: 1,
   },
   ne_blur: {
-    order: 15, text: '背景模糊 (px)', type: 'slider',
+    order: 9006, text: '背景模糊 (px)', type: 'slider',
     value: 0, min: 0, max: 60, step: 1,
   },
   ne_fit: {
-    order: 16, text: '铺满方式', type: 'combo', value: 'cover',
+    order: 9007, text: '铺满方式', type: 'combo', value: 'cover',
     options: [
       { label: '铺满 (cover)', value: 'cover' },
       { label: '完整显示 (contain)', value: 'contain' },
@@ -64,10 +67,10 @@ const PROPS = {
     ],
   },
   ne_audio: {
-    order: 17, text: '播放壁纸音轨', type: 'bool', value: false,
+    order: 9008, text: '播放壁纸音轨', type: 'bool', value: false,
   },
   ne_scenevolume: {
-    order: 18, text: 'Scene 壁纸音量 (%)', type: 'slider',
+    order: 9009, text: 'Scene 壁纸音量 (%)', type: 'slider',
     value: 100, min: 0, max: 100, step: 1,
   },
 };
@@ -110,9 +113,15 @@ export async function applyTo(dir, { revert = false, backup = true } = {}) {
     }
   } else {
     for (const [k, v] of Object.entries({ ...GROUP, ...PROPS })) {
-      if (!(k in props)) {
-        props[k] = v;
+      const cur = props[k];
+      if (!cur) {
+        props[k] = { ...v };
         changed.push('+' + k);
+      } else if (cur.order !== v.order) {
+        // an older version of this tool used orders 9..18, which made our group
+        // swallow every wallpaper property that sorted after it
+        cur.order = v.order;
+        changed.push('~' + k);
       }
     }
   }

@@ -263,8 +263,10 @@ function syncSceneVolume(knobs, mode) {
     return;
   }
   const want = knobs.enabled === false ? 0 : Math.max(0, Math.min(100, Math.round(knobs.sceneVolume ?? 100)));
-  // re-assert now and then: WE resets the session volume when it rebuilds a renderer
-  if (want !== lastSceneVolume || Date.now() - lastSceneVolumeAt > 15000) {
+  // re-assert now and then, because WE resets the session volume when it rebuilds
+  // a renderer — but only when there is something to re-assert
+  const stale = want !== 100 && Date.now() - lastSceneVolumeAt > 60000;
+  if (want !== lastSceneVolume || stale) {
     log(`scene volume: ${want}% (was ${lastSceneVolume})`);
     applySceneVolume(want);
   }
