@@ -16,9 +16,8 @@ import { sceneExe, weExe } from './paths.mjs';
 
 const EXE = sceneExe();
 
-// WE's -x/-y are not accepted by openWallpaper (passing them yields a minimized
-// 160x28 window), so SceneCapture.exe parks the window itself right after it
-// appears — that costs one frame of it sitting at its default spot.
+// WE's -x/-y are not accepted by openWallpaper, so SceneCapture.exe parks the
+// window itself within a few milliseconds of it appearing.
 const BOUNDARY = 'neframe';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -132,10 +131,23 @@ export function createSceneCapture({ port = 2001, fps = 60, quality = 80, log = 
     stalled = true;
   }
 
-  /** Make sure the pop-out window is showing `pkg` and capture is running. */
+  /**
+   * Make sure the pop-out window is showing `pkg` and capture is running.
+   *
+   * Wallpaper Engine reuses an existing pop-out when it gets another
+   * `openWallpaper -playInWindow`, so we never close and reopen the window —
+   * that is what made a big "Wallpaper Pop-out" window flash up on screen for
+   * a few seconds every time the selection changed.
+   */
   async function ensure(pkg, { width = 1920, height = 1080 } = {}) {
     if (currentPkg !== pkg) {
-      if (currentPkg) await closePopout();
+      // Start the capturer *before* asking WE for the window: it spends ~150 ms
+      // starting up, and WE shows the pop-out after ~80 ms — if we launched in
+      // the other order the window would sit in the middle of the screen for a
+      // fifth of a second before we could park it.
+      if (child) stopChild();
+      startedAt = Date.now();
+      startChild();
       log('opening Wallpaper Engine pop-out for', path.basename(pkg));
       spawn(
         weExe(),
@@ -153,10 +165,10 @@ export function createSceneCapture({ port = 2001, fps = 60, quality = 80, log = 
         { detached: true, stdio: 'ignore' }
       ).unref();
       currentPkg = pkg;
-      await sleep(3500);
+    } else {
+      if (!child) startedAt = Date.now();
+      startChild();
     }
-    if (!child) startedAt = Date.now();
-    startChild();
   }
 
   function stop() {
