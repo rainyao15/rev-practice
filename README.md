@@ -164,6 +164,7 @@ Wallpaper Engine 把配置存在一个**以 Windows 账户名命名的段**里�
 - **嵌入页是跨域 iframe**：「个性皮肤 / 头像挂件 / 音乐桌面」本质是 `https://music.163.com/st/vippendant`。注入脚本在子框架里也会跑，早先会在里面再建一层背景，页面就成了死黑的板子；现在子框架只塞一行 `html,body{background:transparent}` 然后让路。
 - **别用 `Start-Process wallpaper64.exe` 重启 WE**：那样起来的 WE 是半初始化状态，`WPEEventWindow` 在，但 `-control` 命令全部石沉大海 —— 表现就是「Scene 壁纸一片空白，日志里也没有 pop-out」。用托盘退出、或用 Steam 启动，`WPEOverlappedWallpaper` 才会正常出现。
 - **`Page.addScriptToEvaluateOnNewDocument` 只对之后新建的文档生效**：改完 `inject.js` 必须给当前文档再 `Runtime.evaluate` 一次，否则页面里跑的还是旧闭包。
+- **切页面时闪一帧白**：背景层是 `z-index: -100` 的 `position: fixed` 元素，切路由时 Chromium 会整篇重绘，偶尔有一帧背景层来不及画，露出的是画布底色。CEF 的画布默认是白的，于是闪白。现在 `html` 也被设成 `var(--colorBackground)`，同样丢一帧时露出来的是主题色，肉眼基本看不出来。
 
 ## 免责
 

@@ -1,7 +1,7 @@
 // Page-side layer. Injected at document-start by the controller, then called
 // with the current knob values whenever Wallpaper Engine's config.json changes.
 (() => {
-  const VERSION = 11;
+  const VERSION = 15;
   // The client embeds third-party pages (<iframe src="https://music.163.com/st/...">).
   // This script runs inside those too, and painting a whole background layer there
   // would just give the iframe its own opaque canvas. All a subframe needs is to get
@@ -76,10 +76,14 @@
 .StyledBackground_s1tq3cvd, .StyledComp_sikguoo { background: none !important; }
 /* CEF paints its window white, so we need our own opaque canvas underneath.
    It is set from --colorBackground at runtime (see syncTheme). */
-html, body { background: transparent !important; }
+html { background: var(--colorBackground, #13131a) !important; }
+body { background: transparent !important; }
 #__neBase {
   position: fixed; inset: 0; z-index: -101; pointer-events: none;
   background: #13131a;
+  /* switching routes repaints the whole document; without a compositor layer
+     of its own the background drops out for one frame and the white CEF
+     canvas underneath shows through as a flash */
 }
 
 #__neVideo {
@@ -88,7 +92,7 @@ html, body { background: transparent !important; }
   z-index: -100; pointer-events: none;
   opacity: ${S.enabled ? S.opacity / 100 : 0};
   filter: blur(${S.blur}px);
-  transform: scale(${1 + Math.min(S.blur, 60) / 900});
+  transform: translateZ(0) scale(${1 + Math.min(S.blur, 60) / 900});
   background: transparent;
 }
 #__neDim {
