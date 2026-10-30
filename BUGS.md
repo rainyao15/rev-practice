@@ -54,3 +54,4 @@
 | 23 | 待机 / 休眠回来后插件整体失效：进程链被收掉，客户端又丢了调试端口 | 三层自启（Run + 启动文件夹 + 每 5 分钟计划任务）+ `native\run-forever.cmd` 监督器 | done |
 | 24 | 待机后 `<video>` 卡死（源断了但元素不报错） | 注入层每 3 秒自查 `readyState`/`error`，必要时换 `src` 重连 | done |
 | 25 | 日志时间戳是 UTC，和 Windows / WE 显示差 8 小时 | `src/main.mjs` 改用本地时间格式化 | done |
+| 26 | 装了三层自启后，每 5 分钟弹出「Windows Script Host 运行时错误 800A0046 没有权限」 | 计划任务触发时 `autostart.vbs` 用 FileSystemObject 打开正被运行中的桥占用的 `bridge.log`；改为完全不碰该文件（交给 `cmd` 的 `>>`），并给所有入口加 `//B` 批量模式，让任何错误都不弹窗 | done |
