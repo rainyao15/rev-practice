@@ -15,9 +15,18 @@ wallpaper layer beneath the existing `z-index:-100` background, and reads its
 parameters from Wallpaper Engine's native property panel. No binary is patched or
 redistributed. Windows only.
 
-![网易云主窗口背景被替换成 Wallpaper Engine 壁纸](docs/images/overview.jpg)
+![网易云主窗口：壁纸铺满整个窗口，歌单卡片浮在上面](docs/images/main-window.jpg)
+
+![播放器模式（黑胶页）同样透出壁纸，唱针和唱片正常显示](docs/images/vinyl-page.jpg)
 
 ---
+
+## 先做这一步：皮肤换成「酷炫黑」
+
+![头像 → 个性皮肤 → 酷炫黑](docs/images/skin.jpg)
+
+> 默认 / 浅色皮肤的背景接近白色，壁纸叠上去会被冲得很淡，像蒙了层雾。
+> **先切到「酷炫黑」**（`头像 → 个性皮肤 → 酷炫黑`），底色够深，壁纸才通透、文字也清楚。
 
 ## 开始用
 
