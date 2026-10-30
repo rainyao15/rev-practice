@@ -111,7 +111,11 @@ npm start         :: 等于 start.cmd
 autostart.cmd            :: 看当前状态
 autostart.cmd install    :: 以后随 Windows 一起启动
 autostart.cmd uninstall  :: 撤掉
+autostart.cmd start      :: 现在就启动（隐藏）
+autostart.cmd stop       :: 停掉隐藏的桥接
 ```
+
+因为启动后没有窗口，想关掉它就用 `autostart.cmd stop`（或者直接跑 `uninstall.cmd`）。
 
 `install` 会做两件事，都不需要管理员权限：
 

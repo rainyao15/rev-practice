@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('install', 'uninstall', 'status')]
+    [ValidateSet('install', 'uninstall', 'status', 'stop', 'start')]
     [string]$Action = 'status',
     [string]$Root = ''
 )
@@ -77,6 +77,28 @@ function Show-Status {
 }
 
 switch ($Action) {
+    'start' {
+        $listening = @(Get-NetTCPConnection -State Listen -LocalPort 2000 -ErrorAction SilentlyContinue)
+        if ($listening.Count) {
+            'already running (port 2000 is listening)'
+        } else {
+            Start-Process -FilePath $wscript -ArgumentList ('"' + $vbsPath + '"') -WindowStyle Hidden
+            Start-Sleep -Seconds 4
+            $listening = @(Get-NetTCPConnection -State Listen -LocalPort 2000 -ErrorAction SilentlyContinue)
+            "started hidden : " + $(if ($listening.Count) { 'yes' } else { 'not yet - check the log' })
+        }
+    }
+    'stop' {
+        $killed = 0
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+            ($_.Name -eq 'node.exe' -and $_.CommandLine -like '*main.mjs*') -or
+            $_.Name -eq 'SceneCapture.exe' -or $_.Name -eq 'SceneAudio.exe'
+        } | ForEach-Object {
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            $killed++
+        }
+        "stopped $killed process(es). The client keeps running; just refresh it or restart the bridge."
+    }
     'install' {
         if (-not (Test-Path $vbsPath)) { throw "autostart.vbs is missing next to autostart.cmd" }
 

@@ -34,6 +34,7 @@ redistributed. Windows only.
 install.cmd              :: 编译两个原生小工具 + 给每张壁纸写入「网易云背景」分组（一次）
 start.cmd                :: 启动桥接，之后在 WE 里选任意壁纸即可
 autostart.cmd install    :: 可选：随 Windows 启动，隐藏窗口，日志落盘
+autostart.cmd stop       :: 因为没窗口，关它用这个
 ```
 
 想撤销：`uninstall.cmd`（它会连开机自启一起撤掉）。
