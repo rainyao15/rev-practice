@@ -1,21 +1,21 @@
-{
-  "name": "cloudmusic-wallpaper-bridge",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Inject Wallpaper Engine wallpapers into the NetEase CloudMusic desktop client, and drive them from Wallpaper Engine's own property panel.",
-  "license": "MIT",
-  "engines": {
-    "node": ">=18"
-  },
-  "bin": {
-    "cloudmusic-wallpaper-bridge": "src/main.mjs",
-    "cloudmusic-wallpaper-bridge-panel": "src/we-panel.mjs"
-  },
-  "scripts": {
-    "start": "node src/main.mjs",
-    "setup": "node src/we-panel.mjs --all && call native\\build.cmd",
-    "build": "call native\\build.cmd",
-    "panel:apply": "node src/we-panel.mjs --all",
-    "panel:revert": "node src/we-panel.mjs --revert --all"
-  }
+﻿{
+    "name":  "cloudmusic-wallpaper-bridge",
+    "version":  "0.1.1",
+    "private":  true,
+    "description":  "Inject Wallpaper Engine wallpapers into the NetEase CloudMusic desktop client, and drive them from Wallpaper Engine\u0027s own property panel.",
+    "license":  "MIT",
+    "engines":  {
+                    "node":  "\u003e=18"
+                },
+    "bin":  {
+                "cloudmusic-wallpaper-bridge":  "src/main.mjs",
+                "cloudmusic-wallpaper-bridge-panel":  "src/we-panel.mjs"
+            },
+    "scripts":  {
+                    "start":  "node src/main.mjs",
+                    "setup":  "node src/we-panel.mjs --all \u0026\u0026 call native\\build.cmd",
+                    "build":  "call native\\build.cmd",
+                    "panel:apply":  "node src/we-panel.mjs --all",
+                    "panel:revert":  "node src/we-panel.mjs --revert --all"
+                }
 }
