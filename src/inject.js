@@ -1,7 +1,7 @@
 // Page-side layer. Injected at document-start by the controller, then called
 // with the current knob values whenever Wallpaper Engine's config.json changes.
 (() => {
-  const VERSION = 16;
+  const VERSION = 18;
   // The client embeds third-party pages (<iframe src="https://music.163.com/st/...">).
   // This script runs inside those too, and painting a whole background layer there
   // would just give the iframe its own opaque canvas. All a subframe needs is to get
@@ -68,6 +68,7 @@
   let styleEl = null;
   let baseEl = null;
   let mediaEl = null;
+  let spareEl = null;
   let mediaKind = '';
   let dimEl = null;
   let tintEl = null;
@@ -86,7 +87,7 @@ body { background: transparent !important; }
      canvas underneath shows through as a flash */
 }
 
-#__neVideo {
+#__neVideo, #__neSpare {
   position: fixed; inset: 0; width: 100%; height: 100%;
   object-fit: ${S.fit}; object-position: center;
   z-index: -100; pointer-events: none;
@@ -95,6 +96,9 @@ body { background: transparent !important; }
   transform: scale(${1 + Math.min(S.blur, 60) / 900});
   background: transparent;
 }
+/* the warm spare keeps decoding while the visible stream is out; it must stay
+   in the layout (visibility, not display) or the browser stops feeding it */
+#__neSpare { visibility: hidden; }
 #__neDim {
   position: fixed; inset: 0; z-index: -99; pointer-events: none;
   background: #000;
@@ -180,21 +184,32 @@ html.ne-vinyl .should-hide-under-vinyl-mode { content-visibility: hidden !import
         mediaEl.remove();
       } catch {}
     }
+    if (spareEl) {
+      try {
+        spareEl.remove();
+      } catch {}
+      spareEl = null;
+    }
     mediaEl = null;
 
     let el;
     if (kind === 'scene') {
-      el = document.createElement('img');
-      el.alt = '';
-      el.decoding = 'async';
-      el.addEventListener('error', () => {
-        // the controller restarted and dropped the MJPEG connection — reconnect
+      // MJPEG over a single <img> goes blank the moment the stream drops (WE
+      // minimises our pop-out, the controller restarts, ...), and a blank image
+      // is a visible flash. Keep a second stream decoding out of sight and swap
+      // to it instead of ever showing an empty layer.
+      el = makeSpareImg();
+      spareEl = makeSpareImg();
+      spareEl.id = '__neSpare';
+      spareEl.style.visibility = 'hidden';
+      spareEl.src = streamUrl();
+      spareEl.addEventListener('error', () => {
         setTimeout(() => {
           if (mediaKind !== 'scene' || !S.url) return;
-          const sep = S.url.includes('?') ? '&' : '?';
-          el.src = S.url + sep + 't=' + Date.now();
+          spareEl.src = streamUrl();
         }, 1500);
       });
+      document.body.insertBefore(spareEl, document.body.firstChild);
     } else {
       el = document.createElement('video');
       el.muted = true;
@@ -212,6 +227,41 @@ html.ne-vinyl .should-hide-under-vinyl-mode { content-visibility: hidden !import
     document.body.insertBefore(el, document.body.firstChild);
     return el;
   };
+
+  // a cache-busted URL so the element opens a fresh stream instead of reusing
+  // the dead one
+  const streamUrl = () => S.url + (S.url.includes('?') ? '&' : '?') + 't=' + Date.now();
+
+  function makeSpareImg() {
+    const i = document.createElement('img');
+    i.alt = '';
+    i.decoding = 'async';
+    i.addEventListener('error', () => {
+      setTimeout(() => {
+        if (mediaKind !== 'scene' || !S.url) return;
+        i.src = streamUrl();
+      }, 1500);
+    });
+    return i;
+  }
+
+  // the visible stream died — promote the spare, then quietly re-arm this one
+  function swapToSpare(why) {
+    if (mediaKind !== 'scene' || !mediaEl || !spareEl) return false;
+    const dead = mediaEl;
+    const warm = spareEl;
+    if (!warm.naturalWidth) return false;
+    warm.style.visibility = '';
+    warm.id = '__neVideo';
+    dead.style.visibility = 'hidden';
+    dead.id = '__neSpare';
+    mediaEl = warm;
+    spareEl = dead;
+    setTimeout(() => {
+      if (spareEl === dead && S.url) dead.src = streamUrl();
+    }, 600);
+    return true;
+  }
 
   const ensure = () => {
     if (!document.body) return false;
@@ -333,9 +383,33 @@ html.ne-vinyl .should-hide-under-vinyl-mode { content-visibility: hidden !import
     mediaEl.src = S.url + sep + 't=' + Date.now();
   };
 
+  // Re-open the stream on the hidden spare and swap it in once it has a frame.
+  // Clearing the visible <img> to reconnect is what the user sees as a flash, so
+  // the frozen last frame stays on screen for as long as it takes.
+  let pendingSwap = false;
+  const rearmSpare = () => {
+    if (mediaKind !== 'scene' || !spareEl || !S.url) return false;
+    spareEl.src = '';
+    spareEl.src = streamUrl();
+    armedAt = Date.now();
+    pendingSwap = true;
+    return true;
+  };
+
   every(() => {
+    if (mediaKind === 'scene' && pendingSwap && spareEl && spareEl.naturalWidth) {
+      pendingSwap = false;
+      swapToSpare('ready');
+      return;
+    }
     if (document.visibilityState !== 'visible') return;
     if (!mediaEl || mediaEl.naturalWidth) return;
+    // the spare is cheaper and, more importantly, invisible: only fall back to
+    // blanking the visible element when there is no warm stream to swap in
+    if (mediaKind === 'scene') {
+      if (swapToSpare('watchdog')) return;
+      if (Date.now() - armedAt > 8000 && rearmSpare()) return;
+    }
     rearmScene(false);
   }, 2000);
 
@@ -381,7 +455,7 @@ html.ne-vinyl .should-hide-under-vinyl-mode { content-visibility: hidden !import
   document.addEventListener('visibilitychange', () => {
     if (!mediaEl) return;
     if (mediaKind === 'scene') {
-      if (!document.hidden) rearmScene(true);
+      if (!document.hidden && !rearmSpare()) rearmScene(true);
       return;
     }
     if (document.hidden) mediaEl.pause();
