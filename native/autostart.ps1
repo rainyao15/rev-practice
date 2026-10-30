@@ -59,6 +59,14 @@ function Show-Status {
     $installed = Test-Path $lnkPath
     "logon shortcut : " + $(if ($installed) { "installed  ($lnkPath)" } else { 'not installed' })
 
+    $taskLine = (& schtasks /query /tn 'cloudmusic-wallpaper-bridge' /fo LIST 2>$null) -join "`n"
+    if ($LASTEXITCODE -eq 0) {
+        $next = ($taskLine -split "`n" | Where-Object { $_ -match 'Next Run Time' }) -replace '.*Next Run Time:\s*', ''
+        "watchdog task  : installed  (every 5 min, next $($next.Trim()))"
+    } else {
+        'watchdog task  : not installed  (run: autostart.cmd install)'
+    }
+
     $client = Get-ClientRunValue
     if ($null -eq $client) {
         'client autorun : no entry (the client will start without a debug port)'
@@ -84,7 +92,7 @@ switch ($Action) {
         if ($listening.Count) {
             'already running (port 2000 is listening)'
         } else {
-            Start-Process -FilePath $wscript -ArgumentList ('"' + $vbsPath + '"') -WindowStyle Hidden
+            Start-Process -FilePath $wscript -ArgumentList ('//B "' + $vbsPath + '"') -WindowStyle Hidden
             Start-Sleep -Seconds 4
             $listening = @(Get-NetTCPConnection -State Listen -LocalPort 2000 -ErrorAction SilentlyContinue)
             "started hidden : " + $(if ($listening.Count) { 'yes' } else { 'not yet - check the log' })
@@ -109,14 +117,17 @@ switch ($Action) {
         # both while the machine is busy booting, so whoever fires first wins and
         # the other one exits on its own (EADDRINUSE is handled quietly).
         $taskName = 'cloudmusic-wallpaper-bridge'
-        $runValue = '"' + $wscript + '" "' + $vbsPath + '"'
+        # //B is batch mode: no Windows Script Host dialog, even on a fatal error.
+        # A watchdog that pops a modal box every five minutes is worse than the
+        # problem it is watching for, so every entry point carries the flag.
+        $runValue = '"' + $wscript + '" //B "' + $vbsPath + '"'
         New-ItemProperty -Path $runKey -Name $taskName -Value $runValue -PropertyType String -Force | Out-Null
         "created  HKCU\Run '$taskName'"
 
         $sh = New-Object -ComObject WScript.Shell
         $lnk = $sh.CreateShortcut($lnkPath)
         $lnk.TargetPath = $wscript
-        $lnk.Arguments = '"' + $vbsPath + '"'
+        $lnk.Arguments = '//B "' + $vbsPath + '"'
         $lnk.WorkingDirectory = $Root
         $lnk.WindowStyle = 7
         $lnk.Description = 'Wallpaper Engine wallpapers behind the NetEase CloudMusic client'
@@ -128,7 +139,7 @@ switch ($Action) {
         # a task that fires every five minutes. The supervisor exits straight
         # away when another bridge already owns the port, so this is a watchdog
         # rather than a second copy.
-        & schtasks /create /f /tn $taskName /sc minute /mo 5 /tr ('"' + $wscript + '" "' + $vbsPath + '"') 2>&1 | Out-Null
+        & schtasks /create /f /tn $taskName /sc minute /mo 5 /tr ('"' + $wscript + '" //B "' + $vbsPath + '"') 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) { "created  scheduled task '$taskName' (every 5 min, self-healing)" }
         else { "warning: could not create the scheduled task (exit $LASTEXITCODE); the two logon entries still work" }
 
@@ -150,7 +161,7 @@ switch ($Action) {
 
         $listening = @(Get-NetTCPConnection -State Listen -LocalPort 2000 -ErrorAction SilentlyContinue)
         if (-not $listening.Count) {
-            Start-Process -FilePath $wscript -ArgumentList ('"' + $vbsPath + '"') -WindowStyle Hidden
+            Start-Process -FilePath $wscript -ArgumentList ('//B "' + $vbsPath + '"') -WindowStyle Hidden
             Start-Sleep -Seconds 4
             $listening = @(Get-NetTCPConnection -State Listen -LocalPort 2000 -ErrorAction SilentlyContinue)
         }
