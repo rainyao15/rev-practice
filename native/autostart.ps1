@@ -54,6 +54,8 @@ function Remove-DebugFlag([string]$cmdline) {
 }
 
 function Show-Status {
+    $runHas = (Get-ItemProperty -Path $runKey -Name 'cloudmusic-wallpaper-bridge' -ErrorAction SilentlyContinue)
+    "logon entry    : " + $(if ($runHas) { 'installed  (HKCU\Run, earliest)' } else { 'not installed' })
     $installed = Test-Path $lnkPath
     "logon shortcut : " + $(if ($installed) { "installed  ($lnkPath)" } else { 'not installed' })
 
@@ -102,6 +104,15 @@ switch ($Action) {
     'install' {
         if (-not (Test-Path $vbsPath)) { throw "autostart.vbs is missing next to autostart.cmd" }
 
+        # Two entry points on purpose: HKCU\Run is picked up early in the logon
+        # sequence, the Startup-folder shortcut is the safety net. Windows delays
+        # both while the machine is busy booting, so whoever fires first wins and
+        # the other one exits on its own (EADDRINUSE is handled quietly).
+        $taskName = 'cloudmusic-wallpaper-bridge'
+        $runValue = '"' + $wscript + '" "' + $vbsPath + '"'
+        New-ItemProperty -Path $runKey -Name $taskName -Value $runValue -PropertyType String -Force | Out-Null
+        "created  HKCU\Run '$taskName'"
+
         $sh = New-Object -ComObject WScript.Shell
         $lnk = $sh.CreateShortcut($lnkPath)
         $lnk.TargetPath = $wscript
@@ -111,6 +122,15 @@ switch ($Action) {
         $lnk.Description = 'Wallpaper Engine wallpapers behind the NetEase CloudMusic client'
         $lnk.Save()
         "created  $lnkPath"
+
+        # Third entry point, and the only one that survives everything being
+        # killed at once (standby, an aggressive antivirus, a crashed session):
+        # a task that fires every five minutes. The supervisor exits straight
+        # away when another bridge already owns the port, so this is a watchdog
+        # rather than a second copy.
+        & schtasks /create /f /tn $taskName /sc minute /mo 5 /tr ('"' + $wscript + '" "' + $vbsPath + '"') 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { "created  scheduled task '$taskName' (every 5 min, self-healing)" }
+        else { "warning: could not create the scheduled task (exit $LASTEXITCODE); the two logon entries still work" }
 
         $client = Get-ClientRunValue
         if ($client -and $client -notmatch '--remote-debugging-port=') {
@@ -140,12 +160,21 @@ switch ($Action) {
         "  $(Join-Path $stateDir 'bridge.log')"
     }
     'uninstall' {
+        $taskName = 'cloudmusic-wallpaper-bridge'
+        if ((Get-ItemProperty -Path $runKey -Name $taskName -ErrorAction SilentlyContinue)) {
+            Remove-ItemProperty -Path $runKey -Name $taskName -Force
+            "removed  HKCU\Run '$taskName'"
+        }
         if (Test-Path $lnkPath) {
             Remove-Item $lnkPath -Force
             "removed  $lnkPath"
         } else {
             'logon shortcut was not installed'
         }
+
+        & schtasks /delete /f /tn $taskName 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { "removed  scheduled task '$taskName'" }
+        else { 'scheduled task was not installed' }
 
         if (Test-Path $runBackup) {
             $original = (Get-Content $runBackup -Raw).Trim()

@@ -1,7 +1,7 @@
 // Page-side layer. Injected at document-start by the controller, then called
 // with the current knob values whenever Wallpaper Engine's config.json changes.
 (() => {
-  const VERSION = 18;
+  const VERSION = 19;
   // The client embeds third-party pages (<iframe src="https://music.163.com/st/...">).
   // This script runs inside those too, and painting a whole background layer there
   // would just give the iframe its own opaque canvas. All a subframe needs is to get
@@ -312,6 +312,22 @@ html.ne-vinyl .should-hide-under-vinyl-mode { content-visibility: hidden !import
       if (mediaEl.paused) mediaEl.play().catch(() => {});
     }
   };
+
+  // A machine coming back from standby can leave the <video> with a dead
+  // source: paused, errored, or stuck at readyState 0, and no event is fired
+  // for that. Reconnect quietly rather than waiting for the user to restart.
+  every(() => {
+    if (document.hidden || !mediaEl || mediaKind === 'scene' || !S.url) return;
+    const broken = mediaEl.error || mediaEl.readyState < 2;
+    if (broken) {
+      const bump = S.url + (S.url.includes('?') ? '&' : '?') + 't=' + Date.now();
+      mediaEl.dataset.src = '';
+      mediaEl.src = bump;
+      mediaEl.play().catch(() => {});
+    } else if (mediaEl.paused) {
+      mediaEl.play().catch(() => {});
+    }
+  }, 3000);
 
   window.__neApply = (patch) => {
     Object.assign(S, patch || {});

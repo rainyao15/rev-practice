@@ -168,6 +168,14 @@ Wallpaper Engine 把配置存在一个**以 Windows 账户名命名的段**里�
 - **Scene 模式下一块白色撕裂**：给媒体层加 `transform: translateZ(0)` 会把它提成独立 GPU tile，页面局部重绘时这块 tile 会被清成白色画布，看起来就是画面里一块白斑在闪。去掉这个提示词就好了 —— 背景层不需要自己的合成层。
 - **`Page.addScriptToEvaluateOnNewDocument` 只对之后新建的文档生效**：改完 `inject.js` 必须给当前文档再 `Runtime.evaluate` 一次，否则页面里跑的还是旧闭包。
 - **切页面时闪一帧白**：背景层是 `z-index: -100` 的 `position: fixed` 元素，切路由时 Chromium 会整篇重绘，偶尔有一帧背景层来不及画，露出的是画布底色。CEF 的画布默认是白的，于是闪白。现在 `html` 也被设成 `var(--colorBackground)`，同样丢一帧时露出来的是主题色，肉眼基本看不出来。
+- **待机回来背景没了**：机器睡一觉醒来，整条进程链（`wscript` → `cmd` → `node`）可能被一起收掉，
+  而客户端会自己重启一次、把 `--remote-debugging-port` 弄丢 —— 既没人守着、也没人补端口。
+  现在自启装了三层：`HKCU\Run`（最先被拉起）、启动文件夹快捷方式（补位）、
+  以及**每 5 分钟跑一次的计划任务**（兜底自愈）。中间还有 `native\run-forever.cmd`：
+  node 退出后 5 秒重启它，端口已被占用时立刻退出、不抢。实测把整条链杀干净，
+  计划任务拉起来后十几秒恢复。
+- **待机后 `<video>` 会卡死**：源断了但元素不报错，画面定住。注入层每 3 秒自查一次，
+  `readyState < 2` 或有 `error` 就换 `src` 重连。
 
 ## 免责
 

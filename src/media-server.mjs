@@ -44,9 +44,20 @@ export function startMediaServer(port) {
     fs.createReadStream(current.file).pipe(res);
   });
 
+  // starting twice at logon (Run key + Startup folder) is expected: the loser
+  // must bow out quietly instead of crashing with an unhandled EADDRINUSE
+  server.on('error', (e) => {
+    if (e && e.code === 'EADDRINUSE') {
+      console.log(`another bridge is already serving on ${port} - leaving it alone`);
+      process.exit(42);
+    }
+    throw e;
+  });
+
   server.listen(port, '127.0.0.1');
 
   return {
+    server,
     url: (name) => `http://127.0.0.1:${port}/${encodeURIComponent(name)}`,
     setFile(file) {
       if (!file || file === current.file) return current.file;

@@ -187,6 +187,7 @@ export function createSceneCapture({ port = 2001, fps = 60, quality = 80, log = 
   }
 
   return {
+    server,
     ensure,
     stop,
     closePopout,
