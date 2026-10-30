@@ -19,6 +19,61 @@ const DEFAULTS = {
 
 const norm = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
 
+/**
+ * Which wallpaper the user ticked `保存为网易云背景` on most recently.
+ *
+ * WE keeps the flag per wallpaper, so ticking a second one leaves the first
+ * ticked too — the file alone cannot say which of them is current. We watch for
+ * the flag flipping to true and remember that one, which is the same rule a
+ * human would use: the last one you ticked wins.
+ */
+const PIN_STATE = path.join(
+  process.env.LOCALAPPDATA || os.tmpdir(),
+  'cloudmusic-wallpaper-bridge',
+  'pin.json',
+);
+let activePin;
+let knownPins = [];
+let pinsPrimed = false;
+
+async function loadPinState() {
+  if (activePin !== undefined) return;
+  try {
+    const j = JSON.parse(await fs.readFile(PIN_STATE, 'utf8'));
+    activePin = typeof j.pin === 'string' ? j.pin : '';
+  } catch {
+    activePin = '';
+  }
+}
+
+async function savePinState() {
+  try {
+    await fs.mkdir(path.dirname(PIN_STATE), { recursive: true });
+    await fs.writeFile(PIN_STATE, JSON.stringify({ pin: activePin || '' }));
+  } catch {}
+}
+
+/** Adopt the newest tick as the current pin; forget it once it is unticked. */
+function trackPins(pins) {
+  if (!pinsPrimed) {
+    // whatever is already ticked when we start is history, not a fresh choice
+    knownPins = pins;
+    pinsPrimed = true;
+    return;
+  }
+  const fresh = pins.filter((p) => !knownPins.includes(p));
+  knownPins = pins;
+  if (fresh.length) {
+    activePin = fresh[fresh.length - 1];
+    savePinState();
+    return;
+  }
+  if (activePin && !pins.includes(activePin)) {
+    activePin = '';
+    savePinState();
+  }
+}
+
 // Keys that live next to the profiles but are not profiles.
 const NOT_A_PROFILE = new Set(['installdirectory', 'installdirectoryx', 'version']);
 
@@ -59,6 +114,21 @@ const typeCache = new Map();
  * and the pin survives restarts for free.
  */
 function findPin(node, selectedFile) {
+  const hits = findPins(node);
+  if (!hits.length) return '';
+  if (hits.length > 1) {
+    // several ticked at once: prefer the one that is on the desktop right now,
+    // otherwise the first by path. main.mjs overrides this with the wallpaper
+    // the user ticked most recently, which is what "pick one" actually means.
+    const want = norm(selectedFile);
+    const same = hits.find((h) => norm(h) === want);
+    return same || hits.sort()[0];
+  }
+  return hits[0];
+}
+
+/** Every wallpaper that has `保存为网易云背景` ticked right now. */
+function findPins(node) {
   const wprops = node?.wproperties || {};
   const hits = [];
   for (const [key, v] of Object.entries(wprops)) {
@@ -66,15 +136,7 @@ function findPin(node, selectedFile) {
     const props = v.Monitor0 || v[Object.keys(v)[0]];
     if (props && props.ne_pin === true) hits.push(key);
   }
-  if (!hits.length) return '';
-  if (hits.length > 1) {
-    // several ticked at once: prefer the one that is on the desktop right now,
-    // otherwise the first by path, so the choice is at least deterministic
-    const want = norm(selectedFile);
-    const same = hits.find((h) => norm(h) === want);
-    return same || hits.sort()[0];
-  }
-  return hits[0];
+  return hits;
 }
 
 /** Wallpaper kind. Reads project.json next to the wallpaper file; falls back to the extension. */
@@ -110,7 +172,10 @@ export async function readState() {
   const firstMonitor = Object.keys(selected).sort()[0];
   const selectedFile = firstMonitor ? selected[firstMonitor]?.file || '' : '';
 
-  const pinKey = findPin(node, selectedFile);
+  const pins = findPins(node);
+  await loadPinState();
+  trackPins(pins);
+  const pinKey = activePin && pins.includes(activePin) ? activePin : findPin(node, selectedFile);
   let pinFile = pinKey;
   let pinMissing = false;
   if (pinFile) {
@@ -159,6 +224,7 @@ export async function readState() {
   return {
     file,
     selectedFile,
+    pins,
     pinFile,
     pinMissing,
     type,
