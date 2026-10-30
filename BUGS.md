@@ -20,7 +20,7 @@
 | 7 | Scene 壁纸 4K 只有 ~17 fps，1440p 约 30 fps | 4K 窗口 + scene 壁纸 | open |
 | 8 | 浅色主题下 `.before` 遮罩几乎不压暗，白字落在亮壁纸上难读 | 切 light 主题 | open |
 | 9 | 黑胶页歌词对比度依赖 `ne_dim`，默认 0 时偏淡 | 打开播放器模式 | open |
-| 10 | 高 DPI（150%/200%）下未验证，可能出现半像素缝或模糊 | 改系统缩放 | open |
+| 10 | 高 DPI（125%/150%/175%）抓帧错位 —— **已修**：`SceneCapture` 启动即声明 per-monitor-v2 DPI 感知，日志会打出 `dpi N` 与 client 尺寸 | 改系统缩放 | fixed |
 
 ## 功能缺口
 
