@@ -162,6 +162,7 @@ Wallpaper Engine 把配置存在一个**以 Windows 账户名命名的段**里�
 - **`openWallpaper` 不接受 `-x` / `-y`**，传了也被忽略（窗口永远开在 `0,0`）。
 - **拖动滑块时 WE 不写 `config.json`**：滑块每次变化只发 `applySingleProperty` 给后端和渲染器，落盘只发生在点「确认」时。所以拖动过程无法实时同步，确认后约 0.1 秒生效。
 - **嵌入页是跨域 iframe**：「个性皮肤 / 头像挂件 / 音乐桌面」本质是 `https://music.163.com/st/vippendant`。注入脚本在子框架里也会跑，早先会在里面再建一层背景，页面就成了死黑的板子；现在子框架只塞一行 `html,body{background:transparent}` 然后让路。
+- **别用 `Start-Process wallpaper64.exe` 重启 WE**：那样起来的 WE 是半初始化状态，`WPEEventWindow` 在，但 `-control` 命令全部石沉大海 —— 表现就是「Scene 壁纸一片空白，日志里也没有 pop-out」。用托盘退出、或用 Steam 启动，`WPEOverlappedWallpaper` 才会正常出现。
 - **`Page.addScriptToEvaluateOnNewDocument` 只对之后新建的文档生效**：改完 `inject.js` 必须给当前文档再 `Runtime.evaluate` 一次，否则页面里跑的还是旧闭包。
 
 ## 免责
