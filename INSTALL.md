@@ -126,6 +126,9 @@ autostart.cmd uninstall  :: 撤掉
 > 网易云升级或重装有可能把它自己的自启项写回去。真出现了就再跑一次
 > `autostart.cmd install`（它幂等），或者 `autostart.cmd` 看一眼哪一项掉了。
 >
+> 快捷方式里记的是**绝对路径**。以后把整个目录挪了位置，重跑一次
+> `autostart.cmd install` 即可。
+>
 > 只看日志：`type "%LOCALAPPDATA%\cloudmusic-wallpaper-bridge\bridge.log"`
 
 ---
