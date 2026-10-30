@@ -105,6 +105,29 @@ npm start         :: 等于 start.cmd
 - 切到歌单页、黑胶歌词页，壁纸依然在
 - WE 的面板里能看到「网易云背景」九项
 
+### 让它开机自启（可选，但强烈建议）
+
+```
+autostart.cmd            :: 看当前状态
+autostart.cmd install    :: 以后随 Windows 一起启动
+autostart.cmd uninstall  :: 撤掉
+```
+
+`install` 会做两件事，都不需要管理员权限：
+
+1. 在**当前用户的启动文件夹**里放一个快捷方式，用 `wscript` 以**隐藏窗口**的方式
+   启动控制器 —— 不会再有任何黑窗，日志写到
+   `%LOCALAPPDATA%\cloudmusic-wallpaper-bridge\bridge.log`。
+2. 把网易云自己的开机自启项（`HKCU\...\Run` 里的 `cloudmusic`）补上
+   `--remote-debugging-port=9222`，原值先备份成
+   `%LOCALAPPDATA%\cloudmusic-wallpaper-bridge\run-entry-backup.txt`。
+   这样开机时客户端就带着端口起来，省掉「发现没端口 → 关掉重开」的 5–10 秒空窗。
+
+> 网易云升级或重装有可能把它自己的自启项写回去。真出现了就再跑一次
+> `autostart.cmd install`（它幂等），或者 `autostart.cmd` 看一眼哪一项掉了。
+>
+> 只看日志：`type "%LOCALAPPDATA%\cloudmusic-wallpaper-bridge\bridge.log"`
+
 ---
 
 ## 五、参数怎么用
@@ -150,11 +173,13 @@ curl http://127.0.0.1:9222/json/version
 
 双击 `uninstall.cmd`，它会：
 
-1. 停掉控制器和抓帧进程
-2. 从每张壁纸的 `project.json` 里删掉所有 `ne_*` 字段
-3. 删掉编译出的两个 exe
+1. 去掉开机自启（删快捷方式、还原网易云的自启项）
+2. 停掉控制器和抓帧进程
+3. 从每张壁纸的 `project.json` 里删掉所有 `ne_*` 字段
+4. 删掉编译出的两个 exe
 
 你的壁纸、Wallpaper Engine 设置、网易云设置**都不会受影响**。
+如果之前装过自启，也可以只跑 `autostart.cmd uninstall` 撤掉那一项，其余照旧。
 
 卸载后 Wallpaper Engine 的**面板里可能还留着那个分组**，重启一次 WE 就没了（它把
 `project.json` 缓存在内存里）。

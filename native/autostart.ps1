@@ -1,0 +1,147 @@
+param(
+    [ValidateSet('install', 'uninstall', 'status')]
+    [string]$Action = 'status',
+    [string]$Root = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+if (-not $Root) { $Root = Split-Path -Parent $PSScriptRoot }
+$Root = (Resolve-Path $Root).Path
+
+$startup = [Environment]::GetFolderPath('Startup')
+$lnkPath = Join-Path $startup 'cloudmusic-wallpaper-bridge.lnk'
+$wscript = Join-Path $env:WINDIR 'System32\wscript.exe'
+$vbsPath = Join-Path $Root 'autostart.vbs'
+
+$stateDir = Join-Path $env:LOCALAPPDATA 'cloudmusic-wallpaper-bridge'
+$runBackup = Join-Path $stateDir 'run-entry-backup.txt'
+$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$runName = 'cloudmusic'
+$debugFlag = '--remote-debugging-port=9222'
+
+function Get-ClientRunValue {
+    try {
+        (Get-ItemProperty -Path $runKey -Name $runName -ErrorAction Stop).$runName
+    } catch {
+        $null
+    }
+}
+
+function Set-ClientRunValue([string]$value) {
+    New-ItemProperty -Path $runKey -Name $runName -Value $value -PropertyType String -Force | Out-Null
+}
+
+# "C:\...\cloudmusic.exe" --orpheus-startup=autorun
+#   -> the exe token stays untouched, the debug flag goes right after it
+function Add-DebugFlag([string]$cmdline) {
+    if ($cmdline -match '--remote-debugging-port=') { return $cmdline }
+    if ($cmdline -match '^\s*"([^"]+)"\s*(.*)$') {
+        $exe = $Matches[1]
+        $rest = $Matches[2].Trim()
+    } elseif ($cmdline -match '^\s*(\S+)\s*(.*)$') {
+        $exe = $Matches[1]
+        $rest = $Matches[2].Trim()
+    } else {
+        return $cmdline
+    }
+    $tail = if ($rest) { " $rest" } else { '' }
+    '"' + $exe + '" ' + $debugFlag + $tail
+}
+
+function Remove-DebugFlag([string]$cmdline) {
+    ($cmdline -replace ('\s*' + [regex]::Escape($debugFlag)), '').Trim()
+}
+
+function Show-Status {
+    $installed = Test-Path $lnkPath
+    "logon shortcut : " + $(if ($installed) { "installed  ($lnkPath)" } else { 'not installed' })
+
+    $client = Get-ClientRunValue
+    if ($null -eq $client) {
+        'client autorun : no entry (the client will start without a debug port)'
+    } elseif ($client -match '--remote-debugging-port=') {
+        "client autorun : port already in place`n                 $client"
+    } else {
+        "client autorun : NO debug port`n                 $client"
+    }
+
+    $listening = @(Get-NetTCPConnection -State Listen -LocalPort 2000 -ErrorAction SilentlyContinue)
+    "bridge running : " + $(if ($listening.Count) { 'yes (port 2000 is listening)' } else { 'no' })
+
+    $log = Join-Path $stateDir 'bridge.log'
+    if (Test-Path $log) {
+        $size = [math]::Round((Get-Item $log).Length / 1KB, 1)
+        "log file       : $log ($size KB)"
+    }
+}
+
+switch ($Action) {
+    'install' {
+        if (-not (Test-Path $vbsPath)) { throw "autostart.vbs is missing next to autostart.cmd" }
+
+        $sh = New-Object -ComObject WScript.Shell
+        $lnk = $sh.CreateShortcut($lnkPath)
+        $lnk.TargetPath = $wscript
+        $lnk.Arguments = '"' + $vbsPath + '"'
+        $lnk.WorkingDirectory = $Root
+        $lnk.WindowStyle = 7
+        $lnk.Description = 'Wallpaper Engine wallpapers behind the NetEase CloudMusic client'
+        $lnk.Save()
+        "created  $lnkPath"
+
+        $client = Get-ClientRunValue
+        if ($client -and $client -notmatch '--remote-debugging-port=') {
+            if (-not (Test-Path $stateDir)) { New-Item -ItemType Directory -Path $stateDir -Force | Out-Null }
+            if (-not (Test-Path $runBackup)) {
+                Set-Content -Path $runBackup -Value $client -Encoding UTF8
+                "backed up the old client autorun entry to $runBackup"
+            }
+            $new = Add-DebugFlag $client
+            Set-ClientRunValue $new
+            "patched  client autorun -> $new"
+        } elseif ($client) {
+            'client autorun already carries the debug port, left alone'
+        } else {
+            'no client autorun entry to patch (fine, the bridge adds the port itself)'
+        }
+
+        $listening = @(Get-NetTCPConnection -State Listen -LocalPort 2000 -ErrorAction SilentlyContinue)
+        if (-not $listening.Count) {
+            Start-Process -FilePath $wscript -ArgumentList ('"' + $vbsPath + '"') -WindowStyle Hidden
+            Start-Sleep -Seconds 4
+            $listening = @(Get-NetTCPConnection -State Listen -LocalPort 2000 -ErrorAction SilentlyContinue)
+        }
+        "bridge running : " + $(if ($listening.Count) { 'yes' } else { 'not yet - check the log' })
+        ''
+        'Done. It now starts with Windows, hidden, and logs to'
+        "  $(Join-Path $stateDir 'bridge.log')"
+    }
+    'uninstall' {
+        if (Test-Path $lnkPath) {
+            Remove-Item $lnkPath -Force
+            "removed  $lnkPath"
+        } else {
+            'logon shortcut was not installed'
+        }
+
+        if (Test-Path $runBackup) {
+            $original = (Get-Content $runBackup -Raw).Trim()
+            Set-ClientRunValue $original
+            Remove-Item $runBackup -Force
+            "restored client autorun -> $original"
+        } else {
+            $client = Get-ClientRunValue
+            if ($client -and $client -match '--remote-debugging-port=') {
+                $restored = Remove-DebugFlag $client
+                Set-ClientRunValue $restored
+                "removed the debug port from client autorun -> $restored"
+            } else {
+                'nothing to restore for the client autorun entry'
+            }
+        }
+        ''
+        'Autostart removed. A bridge that is already running keeps running until you close it.'
+    }
+    default { Show-Status }
+}

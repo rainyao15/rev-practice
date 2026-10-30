@@ -31,16 +31,18 @@ redistributed. Windows only.
 ## 开始用
 
 ```bat
-install.cmd     :: 编译两个原生小工具 + 给每张壁纸写入「网易云背景」分组（一次）
-start.cmd       :: 启动桥接，之后在 WE 里选任意壁纸即可
+install.cmd              :: 编译两个原生小工具 + 给每张壁纸写入「网易云背景」分组（一次）
+start.cmd                :: 启动桥接，之后在 WE 里选任意壁纸即可
+autostart.cmd install    :: 可选：随 Windows 启动，隐藏窗口，日志落盘
 ```
 
-想撤销：`uninstall.cmd`。
+想撤销：`uninstall.cmd`（它会连开机自启一起撤掉）。
 
 遇到问题、或者想要一步步的手把手版本 → **[INSTALL.md](INSTALL.md)（中文安装说明）**。
 
 > 客户端如果已经开着、但没带调试端口，`start.cmd` 会自动重启它（约 5–10 秒恢复）。
-> 不想被打断就加 `--no-relaunch`。
+> 不想被打断就加 `--no-relaunch`。装了 `autostart.cmd install` 之后，开机时客户端
+> 本身就带着端口起来，这一下也不会再发生。
 
 ## 它做了什么
 

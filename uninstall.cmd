@@ -11,6 +11,12 @@ if not exist "%NODE%" set "NODE="
 if not defined NODE for %%I in (node.exe) do set "NODE=%%~$PATH:I"
 if not defined NODE if exist "%ProgramFiles%\nodejs\node.exe" set "NODE=%ProgramFiles%\nodejs\node.exe"
 
+set "ROOT=%~dp0"
+if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+
+echo Removing the logon autostart entry ...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0native\autostart.ps1" -Action uninstall -Root "%ROOT%" >nul 2>&1
+
 echo Stopping the bridge ...
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'node.exe' -and $_.CommandLine -like '*main.mjs*') -or $_.Name -eq 'SceneCapture.exe' -or $_.Name -eq 'SceneAudio.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 
