@@ -24,7 +24,7 @@ Node.js 没装的话：去 <https://nodejs.org> 下载 LTS 版，一路下一步
 
 ### 方式 A：双击（推荐）
 
-解压压缩包，进入 `netease-wallpaper` 文件夹，**双击 `install.cmd`**。
+解压压缩包，进入 `cloudmusic-wallpaper-bridge` 文件夹，**双击 `install.cmd`**。
 
 它会做两件事：
 

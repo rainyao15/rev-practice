@@ -15,6 +15,8 @@ wallpaper layer beneath the existing `z-index:-100` background, and reads its
 parameters from Wallpaper Engine's native property panel. No binary is patched or
 redistributed. Windows only.
 
+![网易云主窗口背景被替换成 Wallpaper Engine 壁纸](docs/images/overview.jpg)
+
 ---
 
 ## 开始用

@@ -24,6 +24,13 @@ if errorlevel 1 (
 
 echo.
 echo [2/2] adding the property section to every wallpaper ...
+echo.
+echo   This writes a small "NetEase background" group into the project.json of every
+echo   wallpaper you are subscribed to, so the controls show up in Wallpaper Engine's
+echo   own property panel. Each file is backed up as project.json.bak-* before its
+echo   first edit, and uninstall.cmd puts them all back.
+echo.
+pause
 "%NODE%" "%~dp0src\we-panel.mjs" --all
 if errorlevel 1 (
   echo [!] could not patch the wallpapers - see the message above.

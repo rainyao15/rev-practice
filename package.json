@@ -1,5 +1,5 @@
 {
-  "name": "netease-wallpaper",
+  "name": "cloudmusic-wallpaper-bridge",
   "version": "0.1.0",
   "private": true,
   "description": "Inject Wallpaper Engine wallpapers into the NetEase CloudMusic desktop client, and drive them from Wallpaper Engine's own property panel.",
@@ -8,8 +8,8 @@
     "node": ">=18"
   },
   "bin": {
-    "netease-wallpaper": "src/main.mjs",
-    "netease-wallpaper-panel": "src/we-panel.mjs"
+    "cloudmusic-wallpaper-bridge": "src/main.mjs",
+    "cloudmusic-wallpaper-bridge-panel": "src/we-panel.mjs"
   },
   "scripts": {
     "start": "node src/main.mjs",

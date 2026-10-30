@@ -14,4 +14,4 @@ if not defined NODE (
   pause
   exit /b 1
 )
-start "netease-wallpaper" /min "%NODE%" "%~dp0src\main.mjs" %*
+start "cloudmusic-wallpaper-bridge" /min "%NODE%" "%~dp0src\main.mjs" %*
