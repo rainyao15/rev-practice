@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { config, weConfigPath } from './paths.mjs';
@@ -54,7 +55,7 @@ async function savePinState() {
 }
 
 /** Adopt the newest tick as the current pin; forget it once it is unticked. */
-function trackPins(pins) {
+function trackPins(pins, changed) {
   if (!pinsPrimed) {
     // whatever is already ticked when we start is history, not a fresh choice
     knownPins = pins;
@@ -63,14 +64,65 @@ function trackPins(pins) {
   }
   const fresh = pins.filter((p) => !knownPins.includes(p));
   knownPins = pins;
-  if (fresh.length) {
-    activePin = fresh[fresh.length - 1];
+  const candidate = (changed || []).length ? changed[changed.length - 1] : fresh[fresh.length - 1];
+  if (candidate && knownPins.includes(candidate)) {
+    activePin = candidate;
     savePinState();
     return;
   }
   if (activePin && !pins.includes(activePin)) {
     activePin = '';
     savePinState();
+  }
+}
+
+/** The Monitor0 block of one wallpaper, however WE happened to name the monitor. */
+function propsOf(node, key) {
+  const v = node?.wproperties?.[key];
+  if (!v || typeof v !== 'object') return null;
+  return v.Monitor0 || v[Object.keys(v)[0]] || null;
+}
+
+const sigOf = (props) => {
+  try {
+    return JSON.stringify(props);
+  } catch {
+    return '';
+  }
+};
+
+let pinSig = new Map();
+let lastClearAt = 0;
+let lastForcedOn = '';
+
+/**
+ * A checkbox cannot express "exactly one of these is the client background", so
+ * a second tick leaves the first one ticked forever: the file then says several
+ * wallpapers are pinned, and confirming a panel that already says `true` changes
+ * nothing observable — which is exactly the "both switches on, confirm, nothing
+ * happens" dead end. Keep the winner the user last meant and write `false` to
+ * the rest, so the panel always shows the truth.
+ */
+async function clearOtherPins(cfg, profile, winner, pins) {
+  if (Date.now() - lastClearAt < 5000) return false;
+  lastClearAt = Date.now();
+  let dirty = false;
+  for (const key of pins) {
+    if (key === winner) continue;
+    const props = propsOf(cfg[profile], key);
+    if (props && props.ne_pin === true) {
+      props.ne_pin = false;
+      dirty = true;
+    }
+  }
+  if (!dirty) return false;
+  try {
+    const tmp = CONFIG + '.tmp';
+    await fs.writeFile(tmp, JSON.stringify(cfg, null, '\t'));
+    await fs.rename(tmp, CONFIG);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -172,10 +224,55 @@ export async function readState() {
   const firstMonitor = Object.keys(selected).sort()[0];
   const selectedFile = firstMonitor ? selected[firstMonitor]?.file || '' : '';
 
-  const pins = findPins(node);
+  let pins = findPins(node);
   await loadPinState();
-  trackPins(pins);
+  // A workshop item that has been deleted or updated leaves its property block
+  // behind, so a pin can point at a file that is no longer there. Never adopt
+  // one of those: it would silently win over a wallpaper that still exists.
+  const alive = pins.filter((k) => { try { return existsSync(k); } catch { return false; } });
+  const dead = pins.filter((k) => !alive.includes(k));
+  if (dead.length) {
+    await clearOtherPins(cfg, profile, null, dead);
+    pins = alive;
+    knownPins = knownPins.filter((k) => alive.includes(k));
+    if (activePin && !alive.includes(activePin)) activePin = '';
+  }
+  // an edit on a pinned wallpaper counts as "this is the one I mean": the panel
+  // sends every slider change straight to the backend, so touching its knobs is
+  // the only observable trace of a confirmation that changed no values.
+  const sigs = new Map();
+  for (const key of pins) sigs.set(key, sigOf(propsOf(node, key)));
+  const changed = pins.filter((k) => pinSig.has(k) && pinSig.get(k) !== sigs.get(k));
+  pinSig = sigs;
+  trackPins(pins, changed);
+  if (pins.length > 1 && pinsPrimed) {
+    const winner = activePin && pins.includes(activePin) ? activePin : findPin(node, selectedFile);
+    if (await clearOtherPins(cfg, profile, winner, pins)) {
+      pins = [winner];
+      knownPins = pins;
+      activePin = winner;
+      await savePinState();
+    }
+  }
   const pinKey = activePin && pins.includes(activePin) ? activePin : findPin(node, selectedFile);
+  // Pinning means "use this one as the client background", so a pin whose own
+  // 启用 switch happens to be off would show nothing at all. Turn it on once.
+  if (pinKey && pinKey !== lastForcedOn) {
+    const p = propsOf(node, pinKey);
+    if (p && p.ne_enabled !== true) {
+      p.ne_enabled = true;
+      try {
+        const tmp = CONFIG + '.tmp';
+        await fs.writeFile(tmp, JSON.stringify(cfg, null, '\t'));
+        await fs.rename(tmp, CONFIG);
+        lastForcedOn = pinKey;
+      } catch {
+        /* the next poll tries again */
+      }
+    } else if (p) {
+      lastForcedOn = pinKey;
+    }
+  }
   let pinFile = pinKey;
   let pinMissing = false;
   if (pinFile) {
