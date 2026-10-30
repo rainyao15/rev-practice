@@ -52,6 +52,31 @@ export function resolveProfile(cfg) {
 
 const typeCache = new Map();
 
+/**
+ * The wallpaper pinned to the NetEase background, if the user ticked
+ * `保存为网易云背景` on one. The pin lives in the wallpaper's own property block,
+ * so whatever WE last wrote to disk is the truth — we keep no copy of our own,
+ * and the pin survives restarts for free.
+ */
+function findPin(node, selectedFile) {
+  const wprops = node?.wproperties || {};
+  const hits = [];
+  for (const [key, v] of Object.entries(wprops)) {
+    if (!v || typeof v !== 'object') continue;
+    const props = v.Monitor0 || v[Object.keys(v)[0]];
+    if (props && props.ne_pin === true) hits.push(key);
+  }
+  if (!hits.length) return '';
+  if (hits.length > 1) {
+    // several ticked at once: prefer the one that is on the desktop right now,
+    // otherwise the first by path, so the choice is at least deterministic
+    const want = norm(selectedFile);
+    const same = hits.find((h) => norm(h) === want);
+    return same || hits.sort()[0];
+  }
+  return hits[0];
+}
+
 /** Wallpaper kind. Reads project.json next to the wallpaper file; falls back to the extension. */
 async function wallpaperType(file) {
   const dir = path.dirname(file);
@@ -83,7 +108,22 @@ export async function readState() {
 
   const selected = node?.general?.wallpaperconfig?.selectedwallpapers || {};
   const firstMonitor = Object.keys(selected).sort()[0];
-  const file = firstMonitor ? selected[firstMonitor]?.file || '' : '';
+  const selectedFile = firstMonitor ? selected[firstMonitor]?.file || '' : '';
+
+  const pinKey = findPin(node, selectedFile);
+  let pinFile = pinKey;
+  let pinMissing = false;
+  if (pinFile) {
+    const ok = await fs.access(pinFile).then(() => true, () => false);
+    if (!ok) {
+      // the pinned wallpaper was unsubscribed or moved — fall back to the desktop one
+      pinMissing = true;
+      pinFile = '';
+    }
+  }
+
+  // pinned wins; with nothing pinned the client follows the desktop wallpaper
+  const file = pinFile || selectedFile;
 
   const wprops = node?.wproperties || {};
   let props = null;
@@ -116,7 +156,17 @@ export async function readState() {
   // our properties only exist once the user has touched the panel
   const touched = props && Object.keys(props).some((k) => k.startsWith('ne_'));
   const type = file ? await wallpaperType(file) : '';
-  return { file, type, knobs, touched: !!touched, profile, configPath: CONFIG };
+  return {
+    file,
+    selectedFile,
+    pinFile,
+    pinMissing,
+    type,
+    knobs,
+    touched: !!touched,
+    profile,
+    configPath: CONFIG,
+  };
 }
 
 export const FIT_VALUES = ['cover', 'contain', 'fill'];

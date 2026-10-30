@@ -36,6 +36,11 @@ const GROUP = {
 };
 
 const PROPS = {
+  // fractional order so this lands on top of our section without renumbering the
+  // properties below it (renumbering would rewrite every installed wallpaper)
+  ne_pin: {
+    order: 9000.5, text: '保存为网易云背景', type: 'bool', value: false,
+  },
   ne_enabled: {
     order: 9001, text: '启用网易云背景', type: 'bool', value: true,
   },
