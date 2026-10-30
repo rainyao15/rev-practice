@@ -41,8 +41,16 @@ f.Close
 
 ' cmd /c needs the whole command wrapped in one extra pair of quotes when the
 ' executable path itself is quoted, otherwise "C:\Program Files\..." splits.
-cmdline = "cmd /c " & q & q & nodeExe & q & " " & q & script & q & _
-          " >> " & q & logFile & q & " 2>&1" & q
+' Always go through the supervisor: if node dies (standby, antivirus, crash) it
+' comes back on its own instead of leaving the client without a background.
+Dim sup
+sup = root & "\native\run-forever.cmd"
+If fso.FileExists(sup) Then
+  cmdline = "cmd /c " & q & q & sup & q & " >> " & q & logFile & q & " 2>&1" & q
+Else
+  cmdline = "cmd /c " & q & q & nodeExe & q & " " & q & script & q & _
+            " >> " & q & logFile & q & " 2>&1" & q
+End If
 
 ' 0 = hidden window, False = do not wait
 sh.Run cmdline, 0, False

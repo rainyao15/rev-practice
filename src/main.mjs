@@ -36,7 +36,12 @@ const NO_RELAUNCH = argv.includes('--no-relaunch');
 const FORCE_SCENE = arg('force-scene', '');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+const pad2 = (n) => String(n).padStart(2, '0');
+// local time, so the log lines line up with what Windows and WE show
+const log = (...a) => {
+  const d = new Date();
+  console.log(`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`, ...a);
+};
 // the reconnect loop can spin for minutes while the client is gone; repeat a
 // message at most once a minute so the log stays readable
 let lastMsg = '';
@@ -77,6 +82,13 @@ async function ensureClient() {
   if (await cdpVersion()) return true;
 
   if (clientRunning()) {
+    // after a reboot the client is often still coming up: Chrome has not opened
+    // the debug port yet, and killing it here would cost another cold start on a
+    // machine that is already busy. Give it a moment first.
+    for (let i = 0; i < 30; i++) {
+      await sleep(500);
+      if (await cdpVersion()) return true;
+    }
     if (NO_RELAUNCH) {
       logOnce('client is running WITHOUT the debug port — restart it via "start.cmd --restart"');
       return false;
@@ -364,10 +376,11 @@ if (!argv.includes('--no-panel-sync')) {
 await ensureClient();
 
 const media = startMediaServer(MEDIA_PORT);
-log(`media server on http://127.0.0.1:${MEDIA_PORT}`);
+// move the startup chatter onto the listeners so a losing instance never claims a port it did not get
+if (media.server) media.server.on('listening', () => log(`media server on http://127.0.0.1:${MEDIA_PORT}`));
 
 const scene = createSceneCapture({ port: SCENE_PORT, fps: 60, quality: 80, log });
-log(`scene capture on http://127.0.0.1:${SCENE_PORT}/frame`);
+if (scene.server) scene.server.on('listening', () => log(`scene capture on http://127.0.0.1:${SCENE_PORT}/frame`));
 
 // drop a pop-out left behind by a previous run
 try {

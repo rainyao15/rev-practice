@@ -1,6 +1,6 @@
 {
   "name": "cloudmusic-wallpaper-bridge",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Inject Wallpaper Engine wallpapers into the NetEase CloudMusic desktop client, and drive them from Wallpaper Engine's own property panel.",
   "license": "MIT",
