@@ -250,6 +250,7 @@ internal static class SceneCapture
         var clock = Stopwatch.StartNew();
         long sent = 0;
         long goneSince = 0;
+        long lastRepair = 0;
 
         while (true)
         {
@@ -275,6 +276,24 @@ internal static class SceneCapture
             int wh = Math.Max(1, wr.Bottom - wr.Top);
             int nw = Math.Max(1, cr.Right - cr.Left);
             int nh = Math.Max(1, cr.Bottom - cr.Top);
+
+            // WE minimises the pop-out whenever openWallpaper is issued again for an
+            // existing window, and a minimised window has a 1x1 client area. Restore
+            // it and re-apply the size instead of streaming empty frames.
+            if (nw < 64 || nh < 64)
+            {
+                if (clock.ElapsedMilliseconds - lastRepair > 1000)
+                {
+                    lastRepair = clock.ElapsedMilliseconds;
+                    ShowWindow(hwnd, 9); // SW_RESTORE
+                    SetWindowPos(hwnd, IntPtr.Zero, ParkX, ParkY, 0, 0, 0x0001 | 0x0010);
+                    if (wantW > 0 && wantH > 0) FixSize(hwnd, wantW, wantH);
+                    Console.Error.WriteLine(string.Format("pop-out minimised ({0}x{1}), restored", nw, nh));
+                    Console.Error.Flush();
+                }
+                Thread.Sleep(50);
+                continue;
+            }
 
             if (ww != fullW || wh != fullH)
             {
