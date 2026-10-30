@@ -139,6 +139,8 @@ Wallpaper Engine 把配置存在一个**以 Windows 账户名命名的段**里�
 
 ## 几个踩过的坑
 
+- **DPI 缩放会毁掉抓帧**：不声明 DPI 感知的话，150% 缩放下系统把窗口度量虚拟化成 2/3，`PrintWindow` 只画左上角那一块，还把标题栏算进画面 —— 抓到的是「只看见一部分壁纸 + 顶部一条白边」。`native\SceneCapture.cs` 现在启动第一件事就是 `SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)`，并在日志里打一行
+  `scene capture: dpi 1.5 (per-monitor-v2), window 1936x1100, client 1920x1080` 备查。
 - **WE 会复用已存在的 pop-out**：再发一次 `openWallpaper -playInWindow` 只换内容，窗口句柄和位置都不变。所以换 Scene 壁纸**不要关旧窗口**，关了再开就会有一个大窗口停在屏幕中间。
 - **窗口必须保持可见**（只是挪到 `-4000,-4000`）：`SW_HIDE` 之后窗口不参与合成，`PrintWindow` 拿到的是一整张黑图。
 - **抓帧进程要比 `openWallpaper` 先启动**：它自己启动要 ~150 ms，WE 80 ms 就把窗口显示出来了。

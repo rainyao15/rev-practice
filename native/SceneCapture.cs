@@ -2,13 +2,20 @@
 // frames to stdout.  Built with the in-box C# compiler, no external deps.
 //
 //   SceneCapture.exe --width 1920 --height 1080 --fps 60 --quality 80
-//                    [--pid 1234] [--class WPEOverlappedWallpaper] [--quiet]
+//                    [--pid 1234] [--class WPEOverlappedWallpaper]
 //
 // The window is moved off-screen and resized so that its *client area* is
 // exactly width x height; the frame (title bar / borders) is cropped away, so
 // every emitted frame is exactly width x height.
 //
+// The process declares itself per-monitor DPI aware before touching any window.
+// Without that, Windows virtualises every metric: at 150% scaling a 1920x1080
+// window reports as 1280x720, PrintWindow fills only the top-left 1280x720, and
+// the title bar ends up inside the frame.  That was a real bug report.
+//
 // Wire format:  "SCENE <w> <h>\n"  then  [uint32 little-endian length][jpeg] ...
+// The header is emitted exactly once; later size changes only go to stderr, so
+// the frame stream stays parseable.
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -54,6 +61,56 @@ internal static class SceneCapture
 
     [DllImport("user32.dll")]
     private static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+
+    [DllImport("shcore.dll", SetLastError = true)]
+    private static extern int SetProcessDpiAwareness(int value);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetProcessDPIAware();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr h);
+
+    /// <summary>
+    /// Per-monitor v2 when the OS has it, per-monitor next, system-aware last.
+    /// Must run before the first window/GDI call, otherwise Windows has already
+    /// latched this process into DPI virtualisation.
+    /// </summary>
+    private static string DeclareDpiAwareness()
+    {
+        try
+        {
+            // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+            if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return "per-monitor-v2";
+        }
+        catch (Exception) { }
+        try
+        {
+            // PROCESS_PER_MONITOR_DPI_AWARE
+            if (SetProcessDpiAwareness(2) == 0) return "per-monitor";
+        }
+        catch (Exception) { }
+        try
+        {
+            if (SetProcessDPIAware()) return "system";
+        }
+        catch (Exception) { }
+        return "unaware";
+    }
+
+    private static double WindowScale(IntPtr hwnd)
+    {
+        try
+        {
+            uint dpi = GetDpiForWindow(hwnd);
+            if (dpi > 0) return dpi / 96.0;
+        }
+        catch (Exception) { }
+        return 1.0;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
@@ -114,6 +171,9 @@ internal static class SceneCapture
 
     private static int Main(string[] args)
     {
+        // first thing, before any window or GDI call
+        string dpiMode = DeclareDpiAwareness();
+
         int pid = 0;
         string cls = "WPEOverlappedWallpaper";
         int fps = 60;
@@ -159,6 +219,20 @@ internal static class SceneCapture
         // then returns an all-black frame
         ShowWindow(hwnd, 4); // SW_SHOWNOACTIVATE
         if (wantW > 0 && wantH > 0) FixSize(hwnd, wantW, wantH);
+
+        // One line of diagnostics so a bug report can tell "wrong size" from
+        // "wrong scaling" without guessing.
+        {
+            RECT wr, cr;
+            GetWindowRect(hwnd, out wr);
+            GetClientRect(hwnd, out cr);
+            Console.Error.WriteLine(string.Format(
+                "dpi {0:0.##} ({1}), window {2}x{3}, client {4}x{5}",
+                WindowScale(hwnd), dpiMode,
+                wr.Right - wr.Left, wr.Bottom - wr.Top,
+                cr.Right - cr.Left, cr.Bottom - cr.Top));
+            Console.Error.Flush();
+        }
 
         var codec = GetEncoder(ImageFormat.Jpeg);
         var ep = new EncoderParameters(1);
@@ -219,7 +293,13 @@ internal static class SceneCapture
                 gCrop = Graphics.FromImage(crop);
                 cw = nw;
                 ch = nh;
-                headered = false;
+                // the header is already on the wire; a new one would corrupt the
+                // frame stream, so only mention the change on stderr
+                if (headered)
+                {
+                    Console.Error.WriteLine(string.Format("client resized to {0}x{1}", cw, ch));
+                    Console.Error.Flush();
+                }
             }
 
             IntPtr hdc = gFull.GetHdc();
