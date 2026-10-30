@@ -1,7 +1,7 @@
 // Page-side layer. Injected at document-start by the controller, then called
 // with the current knob values whenever Wallpaper Engine's config.json changes.
 (() => {
-  const VERSION = 15;
+  const VERSION = 16;
   // The client embeds third-party pages (<iframe src="https://music.163.com/st/...">).
   // This script runs inside those too, and painting a whole background layer there
   // would just give the iframe its own opaque canvas. All a subframe needs is to get
@@ -92,7 +92,7 @@ body { background: transparent !important; }
   z-index: -100; pointer-events: none;
   opacity: ${S.enabled ? S.opacity / 100 : 0};
   filter: blur(${S.blur}px);
-  transform: translateZ(0) scale(${1 + Math.min(S.blur, 60) / 900});
+  transform: scale(${1 + Math.min(S.blur, 60) / 900});
   background: transparent;
 }
 #__neDim {
