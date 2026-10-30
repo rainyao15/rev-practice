@@ -182,6 +182,7 @@ async function session(media, state) {
 
   let lastSignature = '';
   let lastEpoch = '';
+  let lastPin;
   let closed = false;
   ws.addEventListener('close', () => {
     closed = true;
@@ -204,6 +205,17 @@ async function session(media, state) {
       st = await readState();
     } catch {
       continue;
+    }
+    if (st.pinFile !== lastPin) {
+      lastPin = st.pinFile;
+      log(
+        st.pinFile
+          ? 'pinned: ' + path.basename(st.pinFile) + ' (the desktop wallpaper no longer matters)'
+          : 'pinned: none — following the desktop wallpaper',
+      );
+    }
+    if (st.pinMissing) {
+      logOnce('warning: the pinned wallpaper is gone, following the desktop wallpaper again');
     }
     let src;
     try {
