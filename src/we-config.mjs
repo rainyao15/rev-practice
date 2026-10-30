@@ -53,68 +53,24 @@ async function savePinState() {
   } catch {}
 }
 
-/**
- * Tick `保存为网易云背景` on another wallpaper and the first one stays ticked,
- * because WE stores the flag inside each wallpaper's own property block. Keep at
- * most one ticked by writing the others back to false — the panel reads its state
- * from WE's memory, but the next confirm, restart or panel open picks this up.
- */
-async function clearOtherPins(pins, keep) {
-  if (!keep || pins.length <= 1) return 0;
-  try {
-    const cfg = JSON.parse(await fs.readFile(CONFIG, 'utf8'));
-    const profile = resolveProfile(cfg);
-    const node = profile ? cfg[profile] : null;
-    const wprops = node?.wproperties || {};
-    let changed = 0;
-    for (const [key, v] of Object.entries(wprops)) {
-      if (norm(key) === norm(keep)) continue;
-      for (const mon of Object.keys(v || {})) {
-        const m = v[mon];
-        if (m && typeof m === 'object' && m.ne_pin === true) {
-          m.ne_pin = false;
-          changed++;
-        }
-      }
-    }
-    if (!changed) return 0;
-    await fs.writeFile(CONFIG, JSON.stringify(cfg, null, '\t'));
-    return changed;
-  } catch {
-    return 0;
-  }
-}
-
 /** Adopt the newest tick as the current pin; forget it once it is unticked. */
-async function trackPins(pins, selectedFile) {
+function trackPins(pins) {
   if (!pinsPrimed) {
     // whatever is already ticked when we start is history, not a fresh choice
+    knownPins = pins;
     pinsPrimed = true;
-    knownPins = pins;
-    if (!activePin && pins.length > 1) {
-      // several left over from before: settle on one instead of letting every
-      // wallpaper switch drag the background along
-      const want = norm(selectedFile);
-      activePin = pins.find((p) => norm(p) === want) || [...pins].sort()[0];
-      await savePinState();
-    }
-  } else {
-    const fresh = pins.filter((p) => !knownPins.includes(p));
-    knownPins = pins;
-    // exactly one new tick means the user just clicked it; several at once means
-    // WE rewrote the file from its own memory, which is not a choice
-    if (fresh.length === 1) {
-      activePin = fresh[0];
-      await savePinState();
-    }
-    if (activePin && !pins.includes(activePin)) {
-      activePin = '';
-      await savePinState();
-    }
+    return;
   }
-  if (activePin) {
-    const cleared = await clearOtherPins(pins, activePin);
-    if (cleared) knownPins = [activePin];
+  const fresh = pins.filter((p) => !knownPins.includes(p));
+  knownPins = pins;
+  if (fresh.length) {
+    activePin = fresh[fresh.length - 1];
+    savePinState();
+    return;
+  }
+  if (activePin && !pins.includes(activePin)) {
+    activePin = '';
+    savePinState();
   }
 }
 
@@ -218,7 +174,7 @@ export async function readState() {
 
   const pins = findPins(node);
   await loadPinState();
-  await trackPins(pins, selectedFile);
+  trackPins(pins);
   const pinKey = activePin && pins.includes(activePin) ? activePin : findPin(node, selectedFile);
   let pinFile = pinKey;
   let pinMissing = false;
