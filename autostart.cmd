@@ -4,6 +4,8 @@ rem
 rem   autostart.cmd            show what is currently installed
 rem   autostart.cmd install    start with Windows from now on
 rem   autostart.cmd uninstall  stop starting with Windows
+rem   autostart.cmd start      start the bridge now, hidden
+rem   autostart.cmd stop       stop a hidden bridge
 rem
 rem No administrator rights needed: the shortcut goes into the current user's
 rem Startup folder and the client tweak goes into HKCU.
