@@ -9,6 +9,12 @@ $ErrorActionPreference = 'Stop'
 if (-not $Root) { $Root = Split-Path -Parent $PSScriptRoot }
 $Root = (Resolve-Path $Root).Path
 
+# This script is started elevated, in a separate window whose output nobody sees.
+# Keep a transcript so "install said something odd" can always be diagnosed later.
+$stateDir0 = Join-Path $env:LOCALAPPDATA 'cloudmusic-wallpaper-bridge'
+if (-not (Test-Path $stateDir0)) { New-Item -ItemType Directory -Path $stateDir0 -Force | Out-Null }
+try { Start-Transcript -Path (Join-Path $stateDir0 'autostart.log') -Append | Out-Null } catch { }
+
 $startup = [Environment]::GetFolderPath('Startup')
 $lnkPath = Join-Path $startup 'cloudmusic-wallpaper-bridge.lnk'
 $wscript = Join-Path $env:WINDIR 'System32\wscript.exe'
@@ -139,8 +145,11 @@ switch ($Action) {
         # a task that fires every five minutes. The supervisor exits straight
         # away when another bridge already owns the port, so this is a watchdog
         # rather than a second copy.
-        & schtasks /create /f /tn $taskName /sc minute /mo 5 /tr ('"' + $wscript + '" //B "' + $vbsPath + '"') 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) { "created  scheduled task '$taskName' (every 5 min, self-healing)" }
+        # /rl HIGHEST so the watchdog runs elevated: it may have to replace a
+        # client that somebody started as administrator, and an elevated bridge
+        # must not be blocked by a leftover non-elevated copy from an earlier logon.
+        & schtasks /create /f /tn $taskName /sc minute /mo 5 /rl HIGHEST /tr ('"' + $wscript + '" //B "' + $vbsPath + '"') 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { "created  scheduled task '$taskName' (every 5 min, elevated, self-healing)" }
         else { "warning: could not create the scheduled task (exit $LASTEXITCODE); the two logon entries still work" }
 
         $client = Get-ClientRunValue
@@ -207,3 +216,5 @@ switch ($Action) {
     }
     default { Show-Status }
 }
+
+try { Stop-Transcript | Out-Null } catch { }
