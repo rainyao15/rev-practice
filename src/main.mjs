@@ -78,8 +78,59 @@ function killClient() {
   } catch {}
 }
 
+/** PID that currently owns the listening socket on our debug port, or 0. */
+function portOwner() {
+  try {
+    const out = execFileSync('netstat', ['-ano'], { encoding: 'utf8' });
+    const re = new RegExp(`127\\.0\\.0\\.1:${PORT}\\s+\\S+\\s+LISTENING\\s+(\\d+)`);
+    const m = out.match(re);
+    return m ? Number(m[1]) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function killPid(pid) {
+  try {
+    execFileSync('taskkill', ['/PID', String(pid), '/F', '/T'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Wait until no cloudmusic.exe is left. taskkill returns before the processes are
+ * actually gone, and the client is single-instance: launching while the old one
+ * still holds its mutex makes the new process forward the request and exit, so the
+ * debug port never opens. That turns into the "relaunch → never came up" loop.
+ */
+async function waitClientGone(ms = 12000) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (!clientRunning()) return true;
+    await sleep(250);
+  }
+  return !clientRunning();
+}
+
+let relaunchFailures = 0;
+let relaunchPaused = false;
+
 async function ensureClient() {
   if (await cdpVersion()) return true;
+
+  if (relaunchPaused) return false;
+
+  // Something answers on the port but speaks nothing: a leftover CEF that never
+  // finished shutting down keeps the socket bound, and the next launch silently
+  // fails to bind. Take the port back before doing anything else.
+  const owner = portOwner();
+  if (owner) {
+    logOnce(`port ${PORT} is held by pid ${owner} which does not answer — killing it`);
+    killPid(owner);
+    await sleep(1000);
+  }
 
   if (clientRunning()) {
     // after a reboot the client is often still coming up: Chrome has not opened
@@ -97,24 +148,52 @@ async function ensureClient() {
     // and the feature is dead until the client is started correctly
     logOnce('client lost its debug port — relaunching it (--no-relaunch disables this)');
     killClient();
-    await sleep(2500);
+    if (!(await waitClientGone())) {
+      logOnce('could not stop the running client — is it running as administrator?');
+      return false;
+    }
   } else {
-    logOnce('client is not running — waiting for it to start');
-    return false;
+    logOnce('client is not running — starting it');
   }
 
   log('launching the client with --remote-debugging-port=' + PORT);
   spawn(clientExe(), [`--remote-debugging-port=${PORT}`], { detached: true, stdio: 'ignore' }).unref();
 
-  for (let i = 0; i < 60; i++) {
+  // a launch that dies immediately means the single-instance mutex was still held
+  await sleep(3000);
+  if (!clientRunning()) {
+    relaunchFailures++;
+    logOnce('the client exited right after launch (another instance still holding it?)');
+    backoff();
+    return false;
+  }
+
+  for (let i = 0; i < 40; i++) {
     if (await cdpVersion()) {
       log('client is up and debuggable');
+      relaunchFailures = 0;
       return true;
     }
     await sleep(500);
   }
-  logOnce('the debug port never came up');
+  relaunchFailures++;
+  logOnce(`the debug port never came up (attempt ${relaunchFailures})`);
+  backoff();
   return false;
+}
+
+/**
+ * Repeated relaunches are what the user actually feels as "it keeps restarting
+ * my music player". After a few misses, stop and say something useful instead.
+ */
+function backoff() {
+  if (relaunchFailures >= 3) {
+    relaunchPaused = true;
+    logOnce(
+      'giving up on the automatic restart — start the client yourself with "start.cmd", ' +
+        'then restart the bridge (nothing else will be restarted until you do)',
+    );
+  }
 }
 
 async function findPage() {
