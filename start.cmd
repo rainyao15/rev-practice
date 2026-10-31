@@ -30,7 +30,7 @@ rem Starting the client without the debug port is the most common dead end; if i
 rem is already running, offer to do the restart instead of failing silently later.
 tasklist /FI "IMAGENAME eq cloudmusic.exe" /NH 2>nul | findstr /I "cloudmusic.exe" >nul
 if not errorlevel 1 (
-  netstat -ano | findstr /C:":9222 " | findstr /C:"LISTENING" >nul
+  netstat -ano | findstr /C:":9333 " | findstr /C:"LISTENING" >nul
   if errorlevel 1 (
     echo [i] Cloud Music is running without its debug port.
     echo     Restart it now so the wallpaper can attach? [Y/N]

@@ -91,6 +91,20 @@ Wallpaper Engine                          NetEase CloudMusic
 
 改完点面板底部的「确认」才写入 `config.json`，之后约 0.1 秒生效。
 
+### 调试端口
+
+桥接默认走 **9333**，不是 Chromium 系列最常用的 9222 —— 后者经常被你自己开着的
+Edge / Chrome / 各类 Electron 应用占用。
+
+- 端口被**别的程序**占着：不会去杀它，自动顺延到下一个空闲端口（9334、9335…），
+  并用那个端口重启客户端
+- 端口被**一个不肯退出的网易云**占着：杀掉它再启动
+- 只有 /json/version 里的 UA 带 NeteaseMusicDesktop 才会被认作客户端，
+  别人家的 DevTools 不会被误认
+- 想换端口：
+ode src\main.mjs --port 9400，同时把开机项里的
+  --remote-debugging-port 改成同一个值（utostart.cmd install 会重写）
+
 ### 让桌面壁纸和网易云背景不一样
 
 默认情况下网易云跟着桌面壁纸走。想要两个不同的：

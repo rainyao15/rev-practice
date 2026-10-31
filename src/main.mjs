@@ -1,6 +1,6 @@
 // NetEase Cloud Music ← Wallpaper Engine live wallpaper bridge.
 //
-//   node main.mjs [--port 9222] [--media-port 2000] [--restart]
+//   node main.mjs [--port 9333] [--media-port 2000] [--restart]
 //
 // Responsibilities:
 //   1. make sure the client runs with --remote-debugging-port (its CEF passthrough)
@@ -27,7 +27,11 @@ const arg = (name, fallback) => {
   const i = argv.indexOf('--' + name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const PORT = Number(arg('port', 9222));
+// 9222 is the port every Chromium-family browser reaches for when someone adds
+// --remote-debugging-port, so it collides with whatever the user happens to be
+// running. Default to something uncommon; an old 9222 install is still honoured
+// as a *detection* candidate as long as it proves it is the music client.
+let PORT = Number(arg('port', 9333));
 const MEDIA_PORT = Number(arg('media-port', 2000));
 const SCENE_PORT = Number(arg('scene-port', 2001));
 const RESTART = argv.includes('--restart');
@@ -54,12 +58,42 @@ function logOnce(msg) {
   log(msg);
 }
 
-async function cdpVersion() {
+const CDP_UA_MARK = 'NeteaseMusicDesktop';
+
+async function cdpVersion(port = PORT) {
   try {
-    const r = await fetch(`http://127.0.0.1:${PORT}/json/version`, { signal: AbortSignal.timeout(1500) });
-    return r.ok ? await r.json() : null;
+    const r = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1500) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    // Anything can answer on this port. Only the music client's own CEF carries
+    // this token in its UA, so a browser that grabbed the port is never mistaken
+    // for the client we are supposed to be driving.
+    if (!String(j['User-Agent'] || '').includes(CDP_UA_MARK)) return null;
+    return j;
   } catch {
     return null;
+  }
+}
+
+/** Whatever is on the port, and whether it says it is our client. */
+async function probePort(port) {
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1200) });
+    if (!r.ok) return { speaks: true, ours: false, status: r.status };
+    const j = await r.json();
+    return { speaks: true, ours: String(j['User-Agent'] || '').includes(CDP_UA_MARK), status: r.status, ua: j['User-Agent'] };
+  } catch {
+    return { speaks: false, ours: false, status: 0 };
+  }
+}
+
+function pidImage(pid) {
+  try {
+    const out = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' });
+    const m = out.match(/"([^"]+)"/);
+    return m ? m[1] : '';
+  } catch {
+    return '';
   }
 }
 
@@ -78,16 +112,28 @@ function killClient() {
   } catch {}
 }
 
-/** PID that currently owns the listening socket on our debug port, or 0. */
-function portOwner() {
+/** PID that holds a listening socket on a loopback port, or 0. */
+function portOwner(port) {
   try {
     const out = execFileSync('netstat', ['-ano'], { encoding: 'utf8' });
-    const re = new RegExp(`127\\.0\\.0\\.1:${PORT}\\s+\\S+\\s+LISTENING\\s+(\\d+)`);
+    const re = new RegExp(`127\\.0\\.0\\.1:${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)`);
     const m = out.match(re);
     return m ? Number(m[1]) : 0;
   } catch {
     return 0;
   }
+}
+
+function portFree(port) {
+  return portOwner(port) === 0;
+}
+
+/** First loopback port at or above `from` that nothing is listening on. */
+function findFreePort(from, tries = 24) {
+  for (let p = from; p < from + tries; p++) {
+    if (portFree(p)) return p;
+  }
+  return 0;
 }
 
 function killPid(pid) {
@@ -120,16 +166,47 @@ let relaunchPaused = false;
 async function ensureClient() {
   if (await cdpVersion()) return true;
 
+  // An install from before 0.2.0 launches the client with --remote-debugging-port=9222
+  // through the Run key. Adopt it when, and only when, it proves it is the client.
+  if (PORT !== 9222 && (await cdpVersion(9222))) {
+    log(`found the client on the legacy port 9222 — using it`);
+    PORT = 9222;
+    return true;
+  }
+
   if (relaunchPaused) return false;
 
-  // Something answers on the port but speaks nothing: a leftover CEF that never
-  // finished shutting down keeps the socket bound, and the next launch silently
-  // fails to bind. Take the port back before doing anything else.
-  const owner = portOwner();
+  const probe = await probePort(PORT);
+  const owner = portOwner(PORT);
   if (owner) {
-    logOnce(`port ${PORT} is held by pid ${owner} which does not answer — killing it`);
-    killPid(owner);
-    await sleep(1000);
+    const image = pidImage(owner);
+    if (image.toLowerCase() === CLIENT_IMAGE.toLowerCase()) {
+      // a cloudmusic.exe that holds the port but will not talk: never finished
+      // shutting down, and the next launch would fail to bind. Take it back.
+      logOnce(`the client holds ${PORT} but does not answer — killing pid ${owner}`);
+      killPid(owner);
+      await sleep(1000);
+    } else if (probe.ours) {
+      // impossible in practice (another app would have to fake the UA), keep it
+    } else {
+      // Someone else's DevTools / socket lives here. Killing it would take down
+      // whatever the user is running, so move to a port that is actually free.
+      const alt = findFreePort(PORT + 1);
+      if (!alt) {
+        logOnce(`port ${PORT} is used by ${image || 'another process'} and no free port was found`);
+        return false;
+      }
+      logOnce(`port ${PORT} is used by ${image || 'another process'} (${probe.status}) — using ${alt} instead`);
+      PORT = alt;
+    }
+  } else if (probe.speaks) {
+    const alt = findFreePort(PORT + 1);
+    if (!alt) {
+      logOnce(`port ${PORT} answers but is not the client, and no free port was found`);
+      return false;
+    }
+    logOnce(`port ${PORT} answers but is not the client — using ${alt} instead`);
+    PORT = alt;
   }
 
   if (clientRunning()) {
