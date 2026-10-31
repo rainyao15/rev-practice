@@ -123,7 +123,7 @@ autostart.cmd stop       :: 停掉隐藏的桥接
    启动控制器 —— 不会再有任何黑窗，日志写到
    `%LOCALAPPDATA%\cloudmusic-wallpaper-bridge\bridge.log`。
 2. 把网易云自己的开机自启项（`HKCU\...\Run` 里的 `cloudmusic`）补上
-   `--remote-debugging-port=9222`，原值先备份成
+   `--remote-debugging-port=9333`，原值先备份成
    `%LOCALAPPDATA%\cloudmusic-wallpaper-bridge\run-entry-backup.txt`。
    这样开机时客户端就带着端口起来，省掉「发现没端口 → 关掉重开」的 5–10 秒空窗。
 
@@ -183,7 +183,7 @@ node src\we-panel.mjs --dir "D:\SteamLibrary\steamapps\workshop\content\431960\8
 netstat -ano | findstr ":2000 :2001"
 
 :: 3. 调试端口通吗
-curl http://127.0.0.1:9222/json/version
+curl http://127.0.0.1:9333/json/version
 ::    应该返回一段包含 "Chrome/91.0.4472.169" 的 JSON
 ```
 
@@ -221,7 +221,7 @@ curl http://127.0.0.1:9222/json/version
 **Q：壁纸没出现，网易云还是原来的样子**
 
 1. 控制器的那个命令行窗口还开着吗？关了就没有效果
-2. `curl http://127.0.0.1:9222/json/version` 通不通？不通说明客户端没带调试端口，
+2. `curl http://127.0.0.1:9333/json/version` 通不通？不通说明客户端没带调试端口，
    重新 `start.cmd`
 3. WE 面板里的「启用网易云背景」是不是被关掉了
 4. 「壁纸不透明度」是不是 0
@@ -288,7 +288,7 @@ node src\main.mjs
 
   或设环境变量 `WE_PROFILE=Administrator`。
 
-其它可能：客户端没带调试端口（`netstat -ano | findstr ":9222"` 应该有一个 LISTENING）、
+其它可能：客户端没带调试端口（`netstat -ano | findstr ":9333"` 应该有一个 LISTENING）、
 或者网易云窗口还没刷新（关掉重开一次）。
 
 ---

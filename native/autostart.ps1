@@ -18,7 +18,7 @@ $stateDir = Join-Path $env:LOCALAPPDATA 'cloudmusic-wallpaper-bridge'
 $runBackup = Join-Path $stateDir 'run-entry-backup.txt'
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runName = 'cloudmusic'
-$debugFlag = '--remote-debugging-port=9222'
+$debugFlag = '--remote-debugging-port=9333'
 
 function Get-ClientRunValue {
     try {
