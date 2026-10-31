@@ -266,6 +266,8 @@ powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $
 
 正常情况下会自动探测（注册表 → Steam 的 `libraryfolders.vdf` → 常见路径）。探测不到就
 把 `config.example.json` 复制成 `config.json`，填上三个路径。
+端口也可以在这里改（默认 `port` 9333 / `mediaPort` 2000 / `scenePort` 2001），
+改完运行 `node src\ports.mjs` 可以确认生效值；`start.cmd` 会按配置里的端口判断占用。
 
 **Q：面板里网易云背景的开关已经打开了，网易云窗口却没有任何变化**
 

@@ -14,6 +14,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readState } from './we-config.mjs';
 import { clientExe, sceneAudioExe, weConfigPath } from './paths.mjs';
+import { debugPort, mediaPort, scenePort } from './ports.mjs';
 import { startMediaServer } from './media-server.mjs';
 import { createSceneCapture } from './scene-capture.mjs';
 import { syncAll, startPanelWatcher, ensurePanel } from './we-panel.mjs';
@@ -31,9 +32,13 @@ const arg = (name, fallback) => {
 // --remote-debugging-port, so it collides with whatever the user happens to be
 // running. Default to something uncommon; an old 9222 install is still honoured
 // as a *detection* candidate as long as it proves it is the music client.
-let PORT = Number(arg('port', 9333));
-const MEDIA_PORT = Number(arg('media-port', 2000));
-const SCENE_PORT = Number(arg('scene-port', 2001));
+//
+// Every value here can be overridden in config.json (see config.example.json),
+// which is the point of it: users should not have to edit a .cmd file to move a
+// port that some other program already owns.
+let PORT = debugPort(arg('port'));
+const MEDIA_PORT = mediaPort(arg('media-port'));
+const SCENE_PORT = scenePort(arg('scene-port'));
 const RESTART = argv.includes('--restart');
 const NO_RELAUNCH = argv.includes('--no-relaunch');
 // dev aid: force a scene wallpaper regardless of what Wallpaper Engine has selected

@@ -2,5 +2,9 @@
   "clientExe": "",
   "weRoot": "",
   "workshopRoot": "",
-  "weProfile": ""
+  "weProfile": "",
+
+  "port": 9333,
+  "mediaPort": 2000,
+  "scenePort": 2001
 }
