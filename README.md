@@ -153,7 +153,7 @@ docs/how-it-works.md                      原理长文
 BUGS.md                                   已知问题清单
 ```
 
-## 自定义路径
+## 自定义路径与端口
 
 默认自动探测（注册表 → 常见安装位置 → Steam 库）。探测不到就复制 `config.example.json`
 为 `config.json` 手动填，或用环境变量 `NETEASE_EXE` / `WE_ROOT` / `WE_WORKSHOP`。
@@ -161,6 +161,32 @@ BUGS.md                                   已知问题清单
 Wallpaper Engine 把配置存在一个**以 Windows 账户名命名的段**里（`"Rain": {...}`），
 这个名字每台机器都不一样。程序会自动挑「有壁纸配置的那一段」，优先匹配当前登录账户；
 如果同一台机器有多个账户段需要指定，用 `weProfile` 或环境变量 `WE_PROFILE` 强制选择。
+
+三个端口也写在同一个 `config.json` 里，改完重启桥接即可（`start.cmd` / `autostart.cmd start`
+会按配置里的端口去检查占用，不需要改脚本）：
+
+```json
+{
+  "port": 9333,
+  "mediaPort": 2000,
+  "scenePort": 2001
+}
+```
+
+| 键 | 作用 | 什么时候需要改 |
+| --- | --- | --- |
+| `port` | 网易云客户端的 CEF 调试端口 | 9333 被别的程序占了 |
+| `mediaPort` | 视频壁纸的本地 HTTP 端口 | 2000 被别的程序占了 |
+| `scenePort` | Scene 壁纸的 MJPEG 端口 | 2001 被别的程序占了 |
+
+优先级：命令行（`--port` / `--media-port` / `--scene-port`）> `config.json` >
+环境变量（`CMB_PORT` / `CMB_MEDIA_PORT` / `CMB_SCENE_PORT`）> 默认值。
+填了非法值（非 1–65535 的整数）会被忽略并在日志里提示，而不是让程序监听一个坏端口。
+想确认最终生效的是哪三个端口：
+
+```bat
+node src\ports.mjs
+```
 
 ## 已知限制
 

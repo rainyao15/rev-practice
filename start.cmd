@@ -21,11 +21,25 @@ if not defined NODE (
   exit /b 1
 )
 
+rem Ports come from config.json (via src\ports.mjs) so the launcher tests the ports
+rem the bridge will really bind instead of assuming the defaults.
+set "DGPORT=9333"
+set "MDPORT=2000"
+rem node writes the resolved ports to a temp file; a `for /f` over a quoted
+rem command line is fragile when the node path contains spaces.
+set "PORTFILE=%TEMP%\cloudmusic-wallpaper-bridge-ports.txt"
+"%NODE%" "%~dp0src\ports.mjs" > "%PORTFILE%" 2>nul
+for /f "tokens=1,2" %%A in ('type "%PORTFILE%" 2^>nul') do (
+  set "DGPORT=%%A"
+  set "MDPORT=%%B"
+)
+del "%PORTFILE%" >nul 2>&1
+
 rem A second copy would only fight the first one over ports 2000/2001 and over
 rem which process owns the debug port, so say who is already there and stop.
-netstat -ano | findstr /C:":2000 " | findstr /C:"LISTENING" >nul
+netstat -ano | findstr /C:":%MDPORT% " | findstr /C:"LISTENING" >nul
 if not errorlevel 1 (
-  echo [i] The bridge is already running ^(port 2000 is in use^).
+  echo [i] The bridge is already running ^(port %MDPORT% is in use^).
   echo     Stop it first:  autostart.cmd stop
   echo     Or open the running window from the taskbar.
   ping -n 7 127.0.0.1 >nul
@@ -36,7 +50,7 @@ rem Starting the client without the debug port is the most common dead end; if i
 rem is already running, offer the restart instead of failing silently later.
 tasklist /FI "IMAGENAME eq cloudmusic.exe" /NH 2>nul | findstr /I "cloudmusic.exe" >nul
 if not errorlevel 1 (
-  netstat -ano | findstr /C:":9333 " | findstr /C:"LISTENING" >nul
+  netstat -ano | findstr /C:":%DGPORT% " | findstr /C:"LISTENING" >nul
   if errorlevel 1 (
     echo [i] Cloud Music is running without its debug port.
     echo     Restart it now so the wallpaper can attach? [Y/N]

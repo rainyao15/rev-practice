@@ -26,6 +26,18 @@ const readConfig = () => {
 
 export const config = readConfig();
 
+// config.json entries that are numbers (ports) come through as strings just as
+// often as they come through as numbers, so accept both and reject nonsense.
+export const configPort = (key, env, fallback) => {
+  for (const raw of [config[key], env ? process.env[env] : undefined]) {
+    if (raw === undefined || raw === null || raw === '') continue;
+    const n = Number(raw);
+    if (Number.isInteger(n) && n >= 1 && n <= 65535) return n;
+    console.warn(`ignoring ${key}=${raw} from ${config[key] !== undefined ? 'config.json' : env}: not a port number (1-65535)`);
+  }
+  return fallback;
+};
+
 const regQuery = (key, name) => {
   const r = spawnSync('reg', ['query', key, '/v', name], { encoding: 'utf8', windowsHide: true });
   if (r.status !== 0 || !r.stdout) return '';
