@@ -4,7 +4,13 @@ rem Double-click to start. Flags:
 rem   --restart       force a client restart with the debug port
 rem   --no-relaunch   never restart the client, only warn
 rem   --no-panel-sync skip the "add ne_* properties to every wallpaper" pass
+rem
+rem Asking for administrator rights is deliberate: the bridge has to be able to
+rem restart a client that somebody started as administrator, and the logon task it
+rem installs runs with highest privileges.
 setlocal
+cd /d "%~dp0"
+
 set "NODE=%~dp0node.exe"
 if not exist "%NODE%" set "NODE="
 if not defined NODE for %%I in (node.exe) do set "NODE=%%~$PATH:I"
@@ -21,13 +27,13 @@ netstat -ano | findstr /C:":2000 " | findstr /C:"LISTENING" >nul
 if not errorlevel 1 (
   echo [i] The bridge is already running ^(port 2000 is in use^).
   echo     Stop it first:  autostart.cmd stop
-  echo     Or just open the running window from the taskbar.
+  echo     Or open the running window from the taskbar.
   ping -n 7 127.0.0.1 >nul
   exit /b 0
 )
 
 rem Starting the client without the debug port is the most common dead end; if it
-rem is already running, offer to do the restart instead of failing silently later.
+rem is already running, offer the restart instead of failing silently later.
 tasklist /FI "IMAGENAME eq cloudmusic.exe" /NH 2>nul | findstr /I "cloudmusic.exe" >nul
 if not errorlevel 1 (
   netstat -ano | findstr /C:":9333 " | findstr /C:"LISTENING" >nul
@@ -37,9 +43,23 @@ if not errorlevel 1 (
     choice /c YN /n /t 15 /d Y >nul
     if not errorlevel 2 (
       taskkill /IM cloudmusic.exe /F >nul 2>&1
-      timeout /t 2 >nul
+      ping -n 3 127.0.0.1 >nul
     )
   )
 )
 
+fltmc >nul 2>&1
+if not errorlevel 1 goto :run
+
+echo [i] Requesting administrator rights ^(UAC^) ...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0native\elevate.ps1" -Node "%~dp0src\main.mjs" -NodeArgs "%*" -WorkDir "%~dp0." >nul 2>&1
+if not errorlevel 1 (
+  echo [i] The bridge is starting in the elevated window.
+  ping -n 4 127.0.0.1 >nul
+  exit /b 0
+)
+echo [x] Elevation was declined. Continuing without administrator rights;
+echo     a client started as administrator cannot be restarted by the bridge.
+
+:run
 start "cloudmusic-wallpaper-bridge" /min "%NODE%" "%~dp0src\main.mjs" %*

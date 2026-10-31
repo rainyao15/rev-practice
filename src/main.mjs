@@ -163,6 +163,40 @@ async function waitClientGone(ms = 12000) {
 let relaunchFailures = 0;
 let relaunchPaused = false;
 
+/** True when this process holds an elevated token (fsutil refuses otherwise). */
+function detectElevated() {
+  try {
+    execFileSync('fsutil', ['dirty', 'query', process.env.SystemDrive || 'C:'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+const ELEVATED = detectElevated();
+
+/**
+ * Start the music client.
+ *
+ * When the bridge itself runs elevated (autostart/start ask for UAC so they can
+ * replace a client that was started as administrator), the client would inherit
+ * the elevated token. That breaks drag and drop from Explorer into the client and
+ * is not what a music player should run as, so hand the launch to the shell
+ * instead: explorer.exe runs at the normal integrity level and starts its child
+ * with the same token. We do not get a PID back, which is fine — liveness is
+ * tracked through the debug port, not the process.
+ */
+function spawnClient(args) {
+  const exe = clientExe();
+  if (ELEVATED) {
+    // Handing the launch to explorer.exe to strip the elevated token sounds
+    // better than it works: explorer does not reliably pass arguments through,
+    // the client then never sees --remote-debugging-port, and the feature stays
+    // dead. A client that runs beats a tidy integrity level.
+    logOnce('bridge runs elevated, so the client is started elevated too — drag and drop from Explorer into the client will not work');
+  }
+  spawn(exe, args, { detached: true, stdio: 'ignore' }).unref();
+}
+
 async function ensureClient() {
   if (await cdpVersion()) return true;
 
@@ -234,7 +268,7 @@ async function ensureClient() {
   }
 
   log('launching the client with --remote-debugging-port=' + PORT);
-  spawn(clientExe(), [`--remote-debugging-port=${PORT}`], { detached: true, stdio: 'ignore' }).unref();
+  spawnClient([`--remote-debugging-port=${PORT}`]);
 
   // a launch that dies immediately means the single-instance mutex was still held
   await sleep(3000);

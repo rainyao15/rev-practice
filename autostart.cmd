@@ -7,8 +7,9 @@ rem   autostart.cmd uninstall  stop starting with Windows
 rem   autostart.cmd start      start the bridge now, hidden
 rem   autostart.cmd stop       stop a hidden bridge
 rem
-rem No administrator rights needed: the shortcut goes into the current user's
-rem Startup folder and the client tweak goes into HKCU.
+rem Everything except "status" asks for administrator rights (UAC): the logon
+rem task has to run with highest privileges, and an elevated bridge can replace a
+rem client that somebody started as administrator.
 setlocal
 cd /d "%~dp0"
 
@@ -22,13 +23,25 @@ if errorlevel 1 (
   exit /b 1
 )
 
-rem %~dp0 ends with a backslash, which would escape the closing quote
+rem %~dp0 ends with a backslash, which would escape a closing quote
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0native\autostart.ps1" -Action "%ACTION%" -Root "%ROOT%"
-if errorlevel 1 (
-  echo [!] something went wrong, see the message above.
+fltmc >nul 2>&1
+if not errorlevel 1 goto :run
+if /i "%ACTION%"=="status" goto :run
+
+echo [i] Requesting administrator rights ^(UAC^) ...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0native\elevate.ps1" -Script "%~dp0native\autostart.ps1" -Action "%ACTION%" -Root "%ROOT%" -WorkDir "%ROOT%" -KeepOpen >nul 2>&1
+if not errorlevel 1 (
+  echo [i] Continued in the elevated window that just opened.
+  exit /b 0
 )
+echo [x] Elevation was declined. Continuing without administrator rights;
+echo     the logon task will then not be able to run elevated.
+
+:run
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0native\autostart.ps1" -Action "%ACTION%" -Root "%ROOT%"
+if errorlevel 1 echo [!] something went wrong, see the message above.
 echo.
 pause
