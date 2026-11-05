@@ -5,6 +5,10 @@ config.json
 native/*.exe
 native/*.pdb
 
+# runtime state, logs and the panel's throwaway Edge profile
+runtime/
+native/runtime/
+
 # local noise
 node_modules/
 *.log

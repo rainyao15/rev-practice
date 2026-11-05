@@ -14,14 +14,22 @@ import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readState } from './we-config.mjs';
 import { clientExe, sceneAudioExe, weConfigPath } from './paths.mjs';
-import { debugPort, mediaPort, scenePort } from './ports.mjs';
+import { debugPort, mediaPort, scenePort, panelPort } from './ports.mjs';
 import { startMediaServer } from './media-server.mjs';
 import { createSceneCapture } from './scene-capture.mjs';
 import { syncAll, startPanelWatcher, ensurePanel } from './we-panel.mjs';
+import { createPanel } from './panel-state.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const CLIENT_IMAGE = 'cloudmusic.exe';
+
+// the supervisor writes here; the panel's "open log" button just points at it
+const LOG_PATH = path.join(
+  process.env.LOCALAPPDATA || process.env.TEMP || '.',
+  'cloudmusic-wallpaper-bridge',
+  'bridge.log'
+);
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -444,13 +452,16 @@ async function session(media, state) {
     // this loop is the one that reacts to property changes, so the scene audio has
     // to follow it as well — the outside loop only comes round when this one exits
     syncSceneVolume(st.knobs, src.mode);
-    const sig = JSON.stringify(st.knobs) + '|' + src.mode + '|' + src.url;
+    publishState(st, src);
+    // pausing drops the layer without touching the client: same knobs, but disabled
+    const knobs = PAUSED ? { ...st.knobs, enabled: false } : st.knobs;
+    const sig = JSON.stringify(knobs) + '|' + src.mode + '|' + src.url;
     if (sig === lastSignature && epoch === lastEpoch) continue;
     lastSignature = sig;
     lastEpoch = epoch;
     try {
-      const r = await push(st.knobs, src.url, src.mode);
-      log(`knobs -> [${src.mode}]`, JSON.stringify(st.knobs), r?.paused === false ? '(playing)' : '');
+      const r = await push(knobs, src.url, src.mode);
+      log(`knobs -> [${src.mode}]`, JSON.stringify(knobs), r?.paused === false ? '(playing)' : '');
     } catch {
       break;
     }
@@ -577,6 +588,76 @@ if (media.server) media.server.on('listening', () => log(`media server on http:/
 const scene = createSceneCapture({ port: SCENE_PORT, fps: 60, quality: 80, log });
 if (scene.server) scene.server.on('listening', () => log(`scene capture on http://127.0.0.1:${SCENE_PORT}/frame`));
 
+// ------------------------------------------------------------- control panel
+// "Pause" is deliberately weak: it stops pushing the wallpaper and tells the page
+// to drop its layer, but it never touches the client. Closing the panel, quitting
+// Wallpaper Engine, nothing about the music player is affected.
+let PAUSED = argv.includes('--paused');
+const startedAt = Date.now();
+let lastPublish = 0;
+
+const panel = createPanel({
+  port: panelPort(arg('panel-port')),
+  uiDir: path.join(HERE, '..', 'panel', 'ui'),
+  stateFile: path.join(HERE, '..', 'runtime', 'state.json'),
+  log,
+  onAction: async (action, opts) => {
+    if (action === 'pause') {
+      PAUSED = true;
+      log('panel: paused — the background layer will be dropped');
+      return { paused: true };
+    }
+    if (action === 'resume') {
+      PAUSED = false;
+      log('panel: resumed');
+      return { paused: false };
+    }
+    if (action === 'log') {
+      // hand it to the shell so the panel itself never has to know about tools
+      try {
+        spawn('notepad.exe', [LOG_PATH], { detached: true, stdio: 'ignore' }).unref();
+      } catch {}
+      return { file: LOG_PATH, opened: true };
+    }
+    if (action === 'restore') {
+      // destructive: rewrites project.json for every wallpaper, so it has to be
+      // asked for twice (the panel asks, and the request must carry confirm)
+      if (!opts || opts.confirm !== true) {
+        return { hint: '还需要再确认一次才会真的执行' };
+      }
+      const stats = await syncAll({ revert: true, log: () => {} });
+      PAUSED = true;
+      log(`panel: reverted the 网易云背景 group from ${stats.patched} wallpaper(s)`);
+      return {
+        hint: `已从 ${stats.patched} 张壁纸里移除属性组；重启 Wallpaper Engine 后面板项就会消失`,
+        patched: stats.patched,
+      };
+    }
+    throw new Error('unknown action: ' + action);
+  },
+});
+
+// The panel reads this; keeping it on a timer rather than on loop progress means
+// the status stays live even while an injection session is open for hours.
+function publishState(st, src) {
+  if (Date.now() - lastPublish < 1000) return;
+  lastPublish = Date.now();
+  panel.setState({
+    bridge: { running: true, pid: process.pid, paused: PAUSED, since: startedAt },
+    client: { running: true, port: PORT },
+    wallpaper: {
+      file: st.file ? path.basename(st.file) : null,
+      type: st.type || null,
+      mode: src.mode,
+    },
+    pin: st.pinFile ? path.basename(st.pinFile) : null,
+    pinMissing: !!st.pinMissing,
+    wallUrl: src.url || '',
+    ports: { debug: PORT, media: MEDIA_PORT, scene: SCENE_PORT, panel: panelPort(arg('panel-port')) },
+    log: LOG_PATH,
+  });
+}
+
 // drop a pop-out left behind by a previous run
 try {
   await scene.closePopout();
@@ -598,6 +679,9 @@ for (;;) {
   try {
     const st = await readState();
     state.knobs = st.knobs;
+    // pausing means "drop the layer", not "stop the client": the page keeps its
+    // normal background and the music plays on
+    if (PAUSED) state.knobs = { ...state.knobs, enabled: false };
     state.file = st.file;
     state.type = st.type;
     if (!st.profile) {
@@ -609,6 +693,7 @@ for (;;) {
     state.url = src.url;
     state.mode = src.mode;
     syncSceneVolume(st.knobs, state.mode);
+    publishState(st, src);
   } catch (e) {
     logOnce('state: ' + e.message);
   }

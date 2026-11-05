@@ -1,7 +1,7 @@
 // Ports, in one place, so the four ways of starting this thing cannot disagree.
 //
 // Precedence, highest first:
-//   1. the command line (--port / --media-port / --scene-port)
+//   1. the command line (--port / --media-port / --scene-port / --panel-port)
 //   2. config.json next to this file (see config.example.json)
 //   3. environment variables (CMB_PORT / CMB_MEDIA_PORT / CMB_SCENE_PORT)
 //   4. the defaults below
@@ -9,12 +9,13 @@
 // Run this file directly to print the three ports that config.json resolves to —
 // the .cmd launchers do that instead of hard-coding numbers:
 //
-//   node src/ports.mjs      ->  9333 2000 2001
+//   node src/ports.mjs      ->  9333 2000 2001 2011
 import { configPort } from './paths.mjs';
 
 export const DEFAULT_DEBUG_PORT = 9333; // CEF devtools; 9222 collides with every browser
 export const DEFAULT_MEDIA_PORT = 2000; // local HTTP for video wallpapers
 export const DEFAULT_SCENE_PORT = 2001; // MJPEG for captured Scene wallpapers
+export const DEFAULT_PANEL_PORT = 2011; // the control panel page + /state
 
 // A command-line value that is not a usable port is ignored rather than trusted:
 // silently listening on 0 or 70000 would be far more confusing than a warning.
@@ -33,6 +34,7 @@ const pick = (cli, key, env, fallback) => fromCli(cli) || configPort(key, env, f
 export const debugPort = (cli) => pick(cli, 'port', 'CMB_PORT', DEFAULT_DEBUG_PORT);
 export const mediaPort = (cli) => pick(cli, 'mediaPort', 'CMB_MEDIA_PORT', DEFAULT_MEDIA_PORT);
 export const scenePort = (cli) => pick(cli, 'scenePort', 'CMB_SCENE_PORT', DEFAULT_SCENE_PORT);
+export const panelPort = (cli) => pick(cli, 'panelPort', 'CMB_PANEL_PORT', DEFAULT_PANEL_PORT);
 
 // `node src/ports.mjs` — used by start.cmd / autostart.cmd so they test the same
 // ports the bridge will actually bind. Extra arguments are honoured too, which is
@@ -43,5 +45,7 @@ if (process.argv[1] && process.argv[1].endsWith('ports.mjs')) {
     const i = argv.indexOf('--' + name);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : undefined;
   };
-  console.log(`${debugPort(arg('port'))} ${mediaPort(arg('media-port'))} ${scenePort(arg('scene-port'))}`);
+  console.log(
+    `${debugPort(arg('port'))} ${mediaPort(arg('media-port'))} ${scenePort(arg('scene-port'))} ${panelPort(arg('panel-port'))}`
+  );
 }

@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>网易云背景</title>
+<style>
+  :root {
+    --text: #f4f4f7;
+    --muted: #a9a9b4;
+    --good: #3dd56c;
+    --warn: #f0b438;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 13px/1.5 "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+    color: var(--text);
+    background: #0b0b10;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+  }
+
+  /* 背景：静态图或视频都行，磨砂就糊这个 */
+  #wall, #wallVideo {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+  #fallback {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(1200px 600px at 20% 10%, #3a1f4d 0%, transparent 60%),
+      radial-gradient(900px 500px at 90% 80%, #123243 0%, transparent 55%),
+      #0b0b10;
+  }
+
+  /* 最简单的磨砂：半透明底 + backdrop-filter */
+  .glass {
+    position: relative;
+    z-index: 1;
+    width: 336px;
+    padding: 18px 22px;
+    border-radius: 22px;
+    background: rgba(18, 18, 24, 0.44);
+    -webkit-backdrop-filter: blur(26px) saturate(150%);
+    backdrop-filter: blur(26px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    box-shadow:
+      0 24px 60px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .title { display: flex; align-items: baseline; gap: 8px; }
+  .title b { font-size: 15px; }
+  .title span { font-size: 11px; color: var(--muted); }
+
+  .rows { display: flex; flex-direction: column; gap: 7px; }
+  .row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: #6b6b78; }
+  .dot.ok { background: var(--good); box-shadow: 0 0 8px rgba(61, 213, 108, 0.8); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 8px rgba(240, 180, 56, 0.8); }
+  .label { color: var(--muted); }
+  .value { margin-left: auto; font-variant-numeric: tabular-nums; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .warnbar {
+    display: flex;
+    gap: 7px;
+    align-items: flex-start;
+    font-size: 12px;
+    color: #f8e7b4;
+    padding: 6px 9px;
+    border-radius: 9px;
+    background: rgba(240, 180, 56, 0.18);
+    border: 1px solid rgba(240, 180, 56, 0.3);
+  }
+  /* [hidden] alone loses to display:flex above */
+  .warnbar[hidden] { display: none; }
+
+  .actions { display: flex; gap: 8px; }
+  .btn {
+    flex: 1;
+    height: 31px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .btn:hover { background: rgba(255, 255, 255, 0.2); }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn.primary {
+    background: rgba(198, 43, 43, 0.85);
+    border-color: rgba(255, 255, 255, 0.3);
+    font-weight: 600;
+  }
+  .btn.primary:hover { background: rgba(214, 52, 52, 0.93); }
+
+  .hint { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.35; }
+</style>
+</head>
+<body>
+  <img id="wall" alt="" hidden>
+  <video id="wallVideo" muted loop autoplay playsinline hidden></video>
+  <div id="fallback"></div>
+
+  <div class="glass" id="card">
+    <div class="title"><b>网易云背景</b><span>Wallpaper Engine 桥接 · v0.3.0</span></div>
+    <div class="rows" id="rows">
+      <div class="row"><span class="dot"></span><span class="label">桥接</span><span class="value">连接中…</span></div>
+    </div>
+    <div class="warnbar" id="warn" hidden><span>⚠</span><span id="warnText"></span></div>
+    <div class="actions">
+      <button class="btn primary" id="toggle">暂停</button>
+      <button class="btn" id="log">打开日志</button>
+      <button class="btn" id="reset">彻底还原</button>
+    </div>
+    <div class="hint" id="hint">外观参数（不透明度/明暗/染色）在 WE 壁纸属性里调</div>
+  </div>
+
+<script>
+  const q = new URLSearchParams(location.search)
+  const $ = (id) => document.getElementById(id)
+
+  // 磨砂强度现场可调：?blur=26&alpha=0.44
+  const blur = Number(q.get('blur') || 26)
+  const alpha = Number(q.get('alpha') || 0.44)
+  const card = $('card')
+  card.style.backdropFilter = `blur(${blur}px) saturate(150%)`
+  card.style.webkitBackdropFilter = card.style.backdropFilter
+  card.style.background = `rgba(18, 18, 24, ${alpha})`
+
+  const DEFAULT_HINT = '外观参数（不透明度/明暗/染色）在 WE 壁纸属性里调'
+
+  // 只有视频壁纸能在面板里直接渲染（<video> 走本地 HTTP）。
+  // Scene 是 MJPEG 流，在普通 http 页面里 <img> 不可靠，宁可用渐变兜底，
+  // 也不能给用户一块纯黑的窗口。
+  function setWallpaper(mode, url) {
+    const img = $('wall')
+    const vid = $('wallVideo')
+    const fb = $('fallback')
+
+    if (mode === 'video' && url) {
+      if (vid.dataset.src !== url) {
+        vid.dataset.src = url
+        vid.src = url
+        vid.play().catch(() => {})
+      }
+      vid.hidden = false
+      img.hidden = true
+      fb.style.display = 'none'
+      return
+    }
+
+    vid.hidden = true
+    img.hidden = true
+    fb.style.display = ''
+  }
+
+  function row(dot, label, value) {
+    const el = document.createElement('div')
+    el.className = 'row'
+    const d = document.createElement('span')
+    d.className = 'dot ' + (dot || '')
+    const l = document.createElement('span')
+    l.className = 'label'
+    l.textContent = label
+    const v = document.createElement('span')
+    v.className = 'value'
+    v.textContent = value
+    v.title = value
+    el.append(d, l, v)
+    return el
+  }
+
+  function render(s) {
+    const rows = $('rows')
+    rows.replaceChildren()
+
+    const alive = !!(s.bridge && s.bridge.running)
+    rows.appendChild(row(alive ? 'ok' : 'warn', '桥接', alive ? `运行中 · pid ${s.bridge.pid}` : '未运行'))
+
+    const cli = !!(s.client && s.client.running)
+    rows.appendChild(row(cli ? 'ok' : 'warn', '客户端', cli ? `已连接 · 端口 ${s.client.port}` : '未连接'))
+
+    const w = s.wallpaper || {}
+    const kind = w.mode === 'scene' ? 'Scene' : '视频'
+    rows.appendChild(row('', '当前壁纸', w.file ? `${w.file} · ${kind}` : '（无）'))
+
+    const p = s.ports || {}
+    rows.appendChild(row('', '生效端口', `${p.debug} / ${p.media} / ${p.scene}`))
+
+    rows.appendChild(row('', '背景来源', s.pin ? `固定 ${s.pin}` : '跟随桌面'))
+
+    const warn = $('warn')
+    if (s.pinMissing) {
+      $('warnText').textContent = '找不到那张固定壁纸，已回退跟随桌面'
+      warn.hidden = false
+    } else {
+      warn.hidden = true
+    }
+
+    const paused = !!(s.bridge && s.bridge.paused)
+    const toggle = $('toggle')
+    toggle.textContent = paused ? '启用' : '暂停'
+    toggle.dataset.paused = paused ? '1' : ''
+
+    setWallpaper(w.mode, s.wallUrl)
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch('/state', { cache: 'no-store' })
+      const s = await r.json()
+      $('hint').dataset.sticky === '1' || ($('hint').textContent = DEFAULT_HINT)
+      render(s)
+      $('hint').dataset.sticky = ''
+    } catch {
+      $('hint').textContent = '桥接没有响应 —— 它可能已经退出'
+      $('hint').dataset.sticky = '1'
+    }
+  }
+
+  async function act(action, extra) {
+    const r = await fetch('/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...(extra || {}) }),
+    })
+    return r.json()
+  }
+
+  function say(text) {
+    $('hint').textContent = text
+    $('hint').dataset.sticky = '1'
+  }
+
+  $('toggle').addEventListener('click', async (e) => {
+    const b = e.currentTarget
+    b.disabled = true
+    const paused = !!b.dataset.paused
+    await act(paused ? 'resume' : 'pause').catch(() => {})
+    b.disabled = false
+    await poll()
+  })
+
+  $('log').addEventListener('click', async () => {
+    const r = await act('log').catch(() => null)
+    if (r && r.result && r.result.file) say(r.result.file)
+  })
+
+  $('reset').addEventListener('click', async () => {
+    if (!window.confirm('会从所有壁纸的 project.json 里移除「网易云背景」属性组，之后要重启 Wallpaper Engine。\n\n确定吗？')) return
+    const r = await act('restore', { confirm: true }).catch(() => null)
+    if (r && r.result && r.result.hint) say(r.result.hint)
+  })
+
+  poll()
+  setInterval(poll, 1000)
+</script>
+</body>
+</html>

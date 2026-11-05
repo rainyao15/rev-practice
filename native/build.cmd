@@ -20,3 +20,9 @@ echo Built %~dp0SceneCapture.exe
   /r:System.dll
 if errorlevel 1 exit /b 1
 echo Built %~dp0SceneAudio.exe
+
+rem the tray shell: no console, owns the icon and the panel window
+"%CSC%" /nologo /optimize+ /target:winexe /out:"%~dp0BridgePanel.exe" "%~dp0BridgePanel.cs" ^
+  /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll
+if errorlevel 1 exit /b 1
+echo Built %~dp0BridgePanel.exe
