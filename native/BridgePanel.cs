@@ -1,4 +1,4 @@
-﻿// BridgePanel.exe — tray shell for the Wallpaper Engine ↔ NetEase Cloud Music bridge.
+// BridgePanel.exe — tray shell for the Wallpaper Engine ↔ NetEase Cloud Music bridge.
 //
 // It owns no UI of its own: the control panel is the HTML page served by the
 // bridge (src/panel-state.mjs), shown in an Edge "app" window. This process only
@@ -223,6 +223,9 @@ namespace CloudMusicWallpaper
             tray.DoubleClick += delegate { Program.ShowPanel(); };
 
             Program.StartBridge();
+
+            // first run should show something — afterwards the tray icon is enough
+            Program.ShowPanel();
 
             health = new System.Windows.Forms.Timer();
             health.Interval = 3000;
