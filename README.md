@@ -31,9 +31,10 @@ redistributed. Windows only.
 ## 开始用
 
 ```bat
-install.cmd              :: 编译三个原生小工具 + 给每张壁纸写入「网易云背景」分组（一次）
+install.cmd              :: 编译原生小工具 + 给每张壁纸写入「网易云背景」分组 + 建桌面快捷方式（一次）
 panel.cmd                :: 托盘图标 + 控制面板（推荐：日常用这个）
 start.cmd                :: 只要后台桥接、不要界面时用
+restart.cmd              :: 改完代码让它生效：停桥接（UAC）+ 重新拉起托盘
 autostart.cmd install    :: 可选：随 Windows 启动，隐藏窗口，日志落盘
 autostart.cmd stop       :: 因为没窗口，关它用这个
 ```
@@ -173,9 +174,17 @@ src/paths.mjs                             自动探测客户端与 WE 的安装�
 src/media-server.mjs                      本地 HTTP + Range，给 <video> 供片
 src/scene-capture.mjs                     Scene：pop-out 窗口 → 抓帧 → MJPEG
 native/*.cs + build.cmd                   用系统自带 csc.exe 编译的小工具
+native/BridgePanel.cs                     托盘外壳（图标、单实例、开面板）
+native/shortcut.ps1                       建/删桌面快捷方式
+panel/ui/index.html                       控制面板页面（纯 CSS 磨砂，无依赖）
+panel.cmd                                 托盘 + 面板入口
 docs/how-it-works.md                      原理长文
 BUGS.md                                   已知问题清单
 ```
+
+> **重新编译前先停桥接**：`SceneCapture.exe` 正在被桥接占用时，`native\build.cmd`
+> 会报 `CS0016: 未能写入输出文件` —— 这是文件锁，不是代码错。
+> 先 `restart.cmd`（或 `autostart.cmd stop`），再编译。
 
 ## 自定义路径与端口
 

@@ -1,6 +1,7 @@
 @echo off
 rem Undo what install.cmd did:
-rem   - stop the bridge
+rem   - remove the logon autostart entry and the desktop shortcut
+rem   - stop the bridge, the tray and the capture helpers
 rem   - strip every ne_* key from every wallpaper's project.json
 rem   - delete the compiled helpers
 rem Your Wallpaper Engine settings and the client itself are untouched.
@@ -17,7 +18,11 @@ if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 echo Removing the logon autostart entry ...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0native\autostart.ps1" -Action uninstall -Root "%ROOT%" >nul 2>&1
 
-echo Stopping the bridge ...
+echo Removing the desktop shortcut ...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0native\shortcut.ps1" -Action remove -Root "%ROOT%" >nul 2>&1
+
+echo Stopping the bridge, the tray and the helpers ...
+powershell -NoProfile -Command "Get-Process BridgePanel -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'node.exe' -and $_.CommandLine -like '*main.mjs*') -or $_.Name -eq 'SceneCapture.exe' -or $_.Name -eq 'SceneAudio.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 
 if defined NODE (
@@ -28,6 +33,7 @@ if defined NODE (
 echo Deleting compiled helpers ...
 del /q "%~dp0native\SceneCapture.exe" 2>nul
 del /q "%~dp0native\SceneAudio.exe" 2>nul
+del /q "%~dp0native\BridgePanel.exe" 2>nul
 
 echo.
 echo Done. Wallpaper Engine may need one restart before the section disappears from its panel.
